@@ -10,6 +10,7 @@ class MadiunDataVisualizer:
         self.file_path = file_path
         self.xls = pd.ExcelFile(file_path)
     
+    # [All the other methods remain the same]
     def add_akta_filters(self, df):
         """Filter khusus untuk lembar AKTA"""
         st.sidebar.subheader("Filter Data AKTA")
@@ -241,6 +242,97 @@ class MadiunDataVisualizer:
         selected_cols = gender_cols + usia_cols
         
         return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
+        
+    def add_kelompok_umur_filters(self, df):
+        """Filter khusus untuk lembar Kelompok Umur"""
+        st.sidebar.subheader("Filter Data Kelompok Umur")
+        
+        # Filter Kecamatan
+        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        selected_kecamatan = st.sidebar.multiselect(
+            "Pilih Kecamatan",
+            options=kecamatan_list,
+            default=kecamatan_list
+        )
+        
+        # Deteksi kolom kelompok umur
+        umur_cols = []
+        for col in df.columns:
+            if col not in ['KECAMATAN', 'DESA']:
+                # Deteksi pola kolom umur (misalnya "0-4", "5-9", "10-14", dll.)
+                if '-' in col or 'TAHUN' in col.upper() or 'THN' in col.upper():
+                    umur_cols.append(col)
+        
+        # Jika terlalu banyak kelompok umur, buat kategori
+        if len(umur_cols) > 10:
+            # Kelompokkan berdasarkan rentang
+            umur_categories = {
+                'Balita (0-4 tahun)': [col for col in umur_cols if '0-4' in col or '0 - 4' in col],
+                'Anak-anak (5-14 tahun)': [col for col in umur_cols if any(x in col for x in ['5-9', '5 - 9', '10-14', '10 - 14'])],
+                'Remaja (15-24 tahun)': [col for col in umur_cols if any(x in col for x in ['15-19', '15 - 19', '20-24', '20 - 24'])],
+                'Dewasa Muda (25-34 tahun)': [col for col in umur_cols if any(x in col for x in ['25-29', '25 - 29', '30-34', '30 - 34'])],
+                'Dewasa (35-54 tahun)': [col for col in umur_cols if any(x in col for x in ['35-39', '35 - 39', '40-44', '40 - 44', '45-49', '45 - 49', '50-54', '50 - 54'])],
+                'Lansia (55+ tahun)': [col for col in umur_cols if any(x in col for x in ['55-59', '55 - 59', '60-64', '60 - 64', '65-69', '65 - 69', '70-74', '70 - 74', '75+', '75 +'])]
+            }
+            
+            # Pilih kategori umur
+            selected_category = st.sidebar.selectbox(
+                "Pilih Kategori Umur",
+                options=list(umur_categories.keys())
+            )
+            
+            available_umur_options = umur_categories[selected_category]
+        else:
+            available_umur_options = umur_cols
+        
+        # Filter Kelompok Umur
+        selected_umur = st.sidebar.multiselect(
+            "Pilih Kelompok Umur",
+            options=available_umur_options,
+            default=available_umur_options[:5] if len(available_umur_options) > 5 else available_umur_options
+        )
+        
+        # Filter Jenis Tampilan
+        display_options = ['Jumlah Absolut', 'Persentase']
+        selected_display = st.sidebar.radio(
+            "Jenis Tampilan",
+            options=display_options
+        )
+        
+        # Terapkan filter
+        if 'KECAMATAN' in df.columns:
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        else:
+            filtered_df = df
+        
+        # Jika pilihan tampilan adalah persentase, hitung persentase
+        if selected_display == 'Persentase' and selected_umur:
+            # Hitung total untuk setiap baris
+            filtered_df = filtered_df.copy()
+            row_totals = filtered_df[selected_umur].sum(axis=1)
+            
+            # Hitung persentase untuk kolom yang dipilih
+            for col in selected_umur:
+                filtered_df[f'{col} (%)'] = (filtered_df[col] / row_totals * 100).round(2)
+            
+            # Gunakan kolom persentase
+            selected_cols = [f'{col} (%)' for col in selected_umur]
+            
+            # Kembalikan dataframe dengan kolom yang dipilih
+            if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
+                return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
+            elif 'KECAMATAN' in df.columns:
+                return filtered_df[['KECAMATAN'] + selected_cols]
+            else:
+                return filtered_df[selected_cols]
+        else:
+            # Kembalikan dataframe dengan jumlah absolut
+            if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
+                return filtered_df[['KECAMATAN', 'DESA'] + selected_umur]
+            elif 'KECAMATAN' in df.columns:
+                return filtered_df[['KECAMATAN'] + selected_umur]
+            else:
+                return filtered_df[selected_umur]
 
     def add_pendidikan_filters(self, df):
         """Filter khusus untuk lembar Pendidikan"""
@@ -359,6 +451,8 @@ class MadiunDataVisualizer:
             filtered_df = self.add_pekerjaan_filters(df)
         elif 'PERKAWINAN' in sheet_name.upper() or 'KAWIN' in sheet_name.upper():
             filtered_df = self.add_perkawinan_filters(df)
+        elif 'KEL UMUR' in sheet_name.upper() or 'KELOMPOK UMUR' in sheet_name.upper() or 'UMUR' in sheet_name.upper():
+            filtered_df = self.add_kelompok_umur_filters(df)
         else:
             st.warning(f"Tidak ada filter khusus untuk lembar {sheet_name}")
             filtered_df = df
@@ -523,22 +617,52 @@ def main():
     # Membuat tab untuk navigasi
     tab1, tab2, tab3 = st.tabs(["Visualisasi Data", "Perbandingan Antar Data", "Tentang Aplikasi"])
     
-    # Deteksi file Excel
+    # File selection and handling
+    st.sidebar.header("Pilihan File Data")
+    
+    # Check for available files
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    available_files = []
+    
+    # Check for hardcoded files
+    file1_path = os.path.join(current_dir, "STAT_SMT_I_2024.xlsx")
+    file2_path = os.path.join(current_dir, "STAT_SMT_2_2024.xlsx")
+    
+    if os.path.exists(file1_path):
+        available_files.append("STAT_SMT_I_2024.xlsx")
+    
+    if os.path.exists(file2_path):
+        available_files.append("STAT_SMT_2_2024.xlsx")
+    
+    # Option to upload a custom file
     uploaded_file = st.sidebar.file_uploader("Unggah File Excel", type=['xlsx', 'xls'])
+    
+    # File selection radio button (only show if there are available files)
+    file_path = None
     
     if uploaded_file:
         file_path = uploaded_file
-    else:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        default_file = "STAT_SMT_I_2024 WEB AKTA KELAHIRAN 18 TAHUN_DESA.xlsx"
-        file_path = os.path.join(current_dir, default_file)
+        st.sidebar.success(f"Menggunakan file yang diunggah: {uploaded_file.name}")
+    elif available_files:
+        file_selection = st.sidebar.radio(
+            "Pilih File Data:",
+            options=["Unggah File Baru"] + available_files,
+            index=1 if available_files else 0
+        )
         
-        if not os.path.exists(file_path):
-            st.error(f"File default tidak ditemukan: {file_path}")
-            st.info("Silakan unggah file Excel untuk melanjutkan")
-            return
+        if file_selection == "Unggah File Baru":
+            st.sidebar.info("Silakan unggah file Excel di bagian atas sidebar")
+            if not uploaded_file:
+                # If no file is uploaded, use the first available file as default
+                if available_files:
+                    file_path = os.path.join(current_dir, available_files[0])
+                    st.sidebar.info(f"Menggunakan file default: {available_files[0]}")
         else:
-            st.sidebar.info(f"Menggunakan file default: {default_file}")
+            file_path = os.path.join(current_dir, file_selection)
+            st.sidebar.success(f"Menggunakan file: {file_selection}")
+    else:
+        st.error("Tidak ada file data ditemukan. Silakan unggah file Excel.")
+        return
     
     try:
         visualizer = MadiunDataVisualizer(file_path)
@@ -590,10 +714,11 @@ def main():
             - Data Status Perkawinan
             
             ### Petunjuk Penggunaan
-            1. Pilih lembar data yang ingin divisualisasikan pada sidebar
-            2. Sesuaikan filter yang tersedia
-            3. Lihat hasil visualisasi dalam bentuk tabel dan grafik
-            4. Untuk membandingkan data antar lembar, gunakan tab "Perbandingan Antar Data"
+            1. Pilih file data yang ingin digunakan dari sidebar
+            2. Pilih lembar data yang ingin divisualisasikan
+            3. Sesuaikan filter yang tersedia
+            4. Lihat hasil visualisasi dalam bentuk tabel dan grafik
+            5. Untuk membandingkan data antar lembar, gunakan tab "Perbandingan Antar Data"
             
             ### Sumber Data
             Data yang digunakan dalam aplikasi ini bersumber dari Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun.
@@ -603,13 +728,25 @@ def main():
             if st.checkbox("Tampilkan Metadata File"):
                 st.subheader("Metadata File")
                 
+                file_name = ""
+                if isinstance(file_path, str):
+                    file_name = os.path.basename(file_path)
+                else:
+                    file_name = uploaded_file.name
+                    
                 metadata = {
-                    "Nama File": os.path.basename(file_path) if isinstance(file_path, str) else uploaded_file.name,
+                    "Nama File": file_name,
                     "Jumlah Lembar": len(sheet_names),
                     "Daftar Lembar": ", ".join(sheet_names)
                 }
                 
                 st.json(metadata)
+                
+                # Tampilkan informasi perbandingan jika ada dua file yang tersedia
+                if len(available_files) >= 2:
+                    st.subheader("Informasi File Data")
+                    st.info(f"Tersedia {len(available_files)} file data untuk dibandingkan: {', '.join(available_files)}")
+                    st.write("Anda dapat beralih antara file di sidebar untuk membandingkan data dari periode yang berbeda.")
     
     except Exception as e:
         st.error(f"Terjadi kesalahan: {str(e)}")
