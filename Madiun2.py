@@ -1,56 +1,3 @@
-def add_pendidikan_filters(self, df):
-        """Filter khusus untuk lembar Pendidikan"""
-        st.sidebar.subheader("Filter Data Pendidikan")
-        
-        # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
-        selected_kecamatan = st.sidebar.multiselect(
-            "Pilih Kecamatan",
-            options=kecamatan_list,
-            default=kecamatan_list
-        )
-        
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Filter Jenjang Pendidikan - detect from column names
-        education_keywords = ['SD', 'SMP', 'SMA', 'SARJANA', 'DIPLOMA', 'S1', 'S2', 'S3', 
-                           'SLTA', 'SLTP', 'TIDAK SEKOLAH', 'BELUM SEKOLAH', 'TK']
-        
-        # Find columns that contain education level information
-        pendidikan_list = []
-        for col in all_columns:
-            if col not in ['KECAMATAN', 'DESA']:
-                if any(keyword in col.upper() for keyword in education_keywords):
-                    pendidikan_list.append(col)
-        
-        # Fallback if no standard education columns found
-        if not pendidikan_list:
-            pendidikan_list = [col for col in all_columns if col not in ['KECAMATAN', 'DESA']]
-        
-        # Let user select education levels
-        selected_pendidikan = st.sidebar.multiselect(
-            "Pilih Jenjang Pendidikan",
-            options=pendidikan_list,
-            default=pendidikan_list[:3] if len(pendidikan_list) > 3 else pendidikan_list
-        )
-        
-        # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
-        
-        # Ensure at least some columns are selected
-        if not selected_pendidikan:
-            selected_pendidikan = pendidikan_list[:3] if len(pendidikan_list) > 3 else pendidikan_list
-            
-        # Determine which columns to include in the result
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + selected_pendidikan]
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -68,517 +15,277 @@ class MadiunDataVisualizer:
         st.sidebar.subheader("Filter Data AKTA")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
+        # Detect format of the AKTA sheet based on column names
+        is_gender_format = any('LK (MEMILIKI)' in str(col).upper() for col in df.columns)
+        is_age_format = any('(0-5 TAHUN)' in str(col).upper() for col in df.columns)
         
-        # Check what types of columns are available - debug info
-        st.sidebar.markdown("### Available Column Categories:")
-        has_age_columns = any("TAHUN" in col.upper() for col in all_columns)
-        st.sidebar.write(f"Age columns available: {has_age_columns}")
-        
-        # Filter Kategori Usia - be more flexible with detection
-        usia_keywords = ['KESELURUHAN', '0-5 TAHUN', '0-17 TAHUN']
-        available_usia = [opt for opt in usia_keywords if any(opt.lower() in col.lower() for col in all_columns)]
-        
-        if not available_usia:
-            # Fallback if no standard categories found
-            available_usia = ['SEMUA']
-        
-        selected_usia = st.sidebar.selectbox(
-            "Pilih Kategori Usia",
-            options=available_usia,
-            index=0
-        )
-        
-        # Filter Status Kepemilikan - be more flexible with detection
-        status_keywords = ['MEMILIKI', 'BELUM MEMILIKI']
-        available_status = [opt for opt in status_keywords if any(opt.lower() in col.lower() for col in all_columns)]
-        
-        if not available_status:
-            # Fallback if none found
-            available_status = [col for col in all_columns if col not in ['KECAMATAN', 'DESA']]
-        
-        selected_status = st.sidebar.multiselect(
-            "Pilih Status Kepemilikan",
-            options=available_status,
-            default=available_status
-        )
-        
-        # Show available columns for debugging
-        if st.sidebar.checkbox("Show all columns"):
-            st.sidebar.write(all_columns)
-        
-        # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
+        # Different filters based on sheet format
+        if is_age_format:
+            # First semester format (AKTA 0 SD 17 DESA)
+            # Filter Kategori Usia
+            usia_options = ['KESELURUHAN', '0-5 TAHUN', '0-17 TAHUN']
+            selected_usia = st.sidebar.selectbox(
+                "Pilih Kategori Usia",
+                options=usia_options
+            )
+            
+            # Filter Status Kepemilikan
+            status_options = ['MEMILIKI', 'BELUM MEMILIKI']
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Kepemilikan",
+                options=status_options,
+                default=status_options
+            )
+            
+            # Terapkan filter
             filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Kolom yang akan digunakan berdasarkan usia
+            cols_to_use = [col for col in df.columns if isinstance(col, str) and selected_usia.lower() in col.lower()]
+            status_cols = [col for col in cols_to_use if any(status.upper() in col.upper() for status in selected_status)]
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
+        
+        elif is_gender_format:
+            # Second semester format (AKTA with gender breakdown)
+            # Filter Jenis Kelamin
+            gender_options = ['LK', 'PR', 'JML']
+            selected_gender = st.sidebar.multiselect(
+                "Pilih Jenis Kelamin",
+                options=gender_options,
+                default=gender_options
+            )
+            
+            # Filter Status Kepemilikan
+            status_options = ['MEMILIKI', 'BELUM MEMILIKI']
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Kepemilikan",
+                options=status_options,
+                default=status_options
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Kolom yang akan digunakan
+            status_cols = []
+            for gender in selected_gender:
+                for status in selected_status:
+                    col_name = f"{gender} ({status})"
+                    if col_name in df.columns:
+                        status_cols.append(col_name)
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
+        
         else:
-            filtered_df = df
-        
-        # Kolom yang akan digunakan berdasarkan usia dan status - handle more flexibly
-        status_cols = []
-        
-        # If only looking at "SEMUA" or using a fallback
-        if selected_usia == 'SEMUA':
-            # Just take non-KECAMATAN/DESA columns
-            status_cols = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
-        else:
-            # Try to find usia-related columns
-            usia_cols = [col for col in df.columns if selected_usia.lower() in col.lower()]
-            # Then filter to those matching status
-            status_cols = [col for col in usia_cols if any(status.lower() in col.lower() for status in selected_status)]
-        
-        # Fallback: If no columns were selected, use at least some numeric columns
-        if not status_cols:
-            # Select all numeric columns except KECAMATAN and DESA
-            status_cols = [col for col in df.select_dtypes(include=['float64', 'int64']).columns 
-                         if col not in ['KECAMATAN', 'DESA']]
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + status_cols]
+            # Fallback for unknown format
+            st.warning("Format lembar AKTA tidak dikenali. Menampilkan semua kolom numerik.")
+            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            return filtered_df[['KECAMATAN', 'DESA'] + list(numeric_cols)]
 
     def add_ktp_filters(self, df):
         """Filter khusus untuk lembar KTP"""
         st.sidebar.subheader("Filter Data KTP")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Filter Jenis Kelamin - be more flexible
-        gender_keywords = ['LK', 'PR', 'LAKI', 'PRIA', 'WANITA', 'PEREMPUAN']
-        
-        # Find columns with gender indicators
-        gender_cols = []
-        for col in all_columns:
-            if any(gender.lower() in col.lower() for gender in gender_keywords):
-                for keyword in gender_keywords:
-                    if keyword.lower() in col.lower():
-                        gender_cols.append((col, keyword))
-                        break
-        
-        # Extract available genders
-        available_genders = list(set(gender for _, gender in gender_cols))
-        
-        # Fallback if no standard gender found
-        if not available_genders:
-            available_genders = ['LK', 'PR']
-            
+        # Filter Jenis Kelamin
+        gender_options = ['LK', 'PR']
         selected_gender = st.sidebar.multiselect(
             "Pilih Jenis Kelamin",
-            options=available_genders,
-            default=available_genders
+            options=gender_options,
+            default=gender_options
         )
         
-        # Filter Kategori KTP - be more flexible
-        ktp_keywords = ['WAJIB KTP', 'PEREKAMAN KTP-EL', 'PENCETAKAN KTP-EL']
-        
-        # Find available KTP categories
-        available_categories = [cat for cat in ktp_keywords if any(cat.lower() in col.lower() for col in all_columns)]
-        
-        # Fallback if none found
-        if not available_categories:
-            available_categories = ['KTP']
-            
+        # Filter Kategori KTP
+        ktp_categories = ['WAJIB KTP', 'PEREKAMAN KTP-EL', 'PENCETAKAN KTP-EL']
         selected_category = st.sidebar.selectbox(
             "Pilih Kategori KTP",
-            options=available_categories,
-            index=0
+            options=ktp_categories
         )
         
         # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
         
-        # Kolom yang akan digunakan - more flexible approach
-        gender_cols = []
+        # Kolom yang akan digunakan
+        gender_cols = [col for col in df.columns if any(gender in col for gender in selected_gender) 
+                      and selected_category in col]
         
-        # If using standard categories
-        if selected_category in ktp_keywords:
-            # Find columns that match both gender and category
-            gender_cols = [col for col in all_columns 
-                          if any(gender.lower() in col.lower() for gender in selected_gender)
-                          and selected_category.lower() in col.lower()]
-        else:
-            # Fallback - just look for gender columns
-            gender_cols = [col for col in all_columns 
-                          if any(gender.lower() in col.lower() for gender in selected_gender)]
-        
-        # Fallback: If no columns were selected, use some numeric columns
-        if not gender_cols:
-            gender_cols = [col for col in df.select_dtypes(include=['float64', 'int64']).columns 
-                          if col not in ['KECAMATAN', 'DESA']]
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + gender_cols]
+        return filtered_df[['KECAMATAN', 'DESA'] + gender_cols]
 
     def add_agama_filters(self, df):
         """Filter khusus untuk lembar AGAMA"""
         st.sidebar.subheader("Filter Data Agama")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Filter Agama - detect available religions from column names
-        agama_keywords = ['ISLAM', 'KRISTEN', 'KATHOLIK', 'HINDU', 'BUDHA', 'KONGHUCHU', 
-                         'KEPERCAYAAN TERHADAP TUHAN YME']
-        
-        # Find available religions in the data
-        available_agama = []
-        for agama in agama_keywords:
-            if any(agama.lower() in col.lower() for col in all_columns):
-                available_agama.append(agama)
-        
-        # Fallback if none found
-        if not available_agama:
-            available_agama = [col for col in all_columns if col not in ['KECAMATAN', 'DESA']]
-            
+        # Filter Agama
+        agama_list = ['ISLAM', 'KRISTEN', 'KATHOLIK', 'HINDU', 'BUDHA', 'KONGHUCHU', 
+                      'KEPERCAYAAN TERHADAP TUHAN YME']
         selected_agama = st.sidebar.multiselect(
             "Pilih Agama",
-            options=available_agama,
-            default=[available_agama[0]] if available_agama else []
+            options=agama_list,
+            default=['ISLAM']
         )
         
         # Filter Jenis Data
         data_type = st.sidebar.selectbox(
             "Pilih Jenis Data",
-            options=['JUMLAH', 'DETAIL GENDER'],
-            index=0
+            options=['JUMLAH', 'DETAIL GENDER']
         )
         
         # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
         
-        # Kolom yang akan digunakan - more flexible approach
-        agama_cols = []
-        
-        # For JUMLAH data type
+        # Kolom yang akan digunakan
         if data_type == 'JUMLAH':
-            for agama in selected_agama:
-                # Look for columns with religion name and possibly "JUMLAH"
-                matches = [col for col in all_columns if agama.lower() in col.lower() 
-                          and ('jumlah' in col.lower() or not any(gender in col.lower() for gender in ['lk', 'pr', 'laki', 'perempuan']))]
-                agama_cols.extend(matches)
+            agama_cols = [f'JUMLAH ({agama})' for agama in selected_agama]
         else:
-            # For DETAIL GENDER
-            gender_keywords = ['LK', 'PR', 'LAKI', 'PRIA', 'WANITA', 'PEREMPUAN']
+            agama_cols = []
             for agama in selected_agama:
-                for gender in gender_keywords:
-                    matches = [col for col in all_columns if agama.lower() in col.lower() and gender.lower() in col.lower()]
-                    agama_cols.extend(matches)
+                agama_cols.extend([f'LK ({agama})', f'PR ({agama})'])
         
-        # Fallback: If no columns selected, use all non-base numeric columns
-        if not agama_cols:
-            agama_cols = [col for col in df.select_dtypes(include=['float64', 'int64']).columns 
-                         if col not in ['KECAMATAN', 'DESA']]
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + agama_cols]
+        return filtered_df[['KECAMATAN', 'DESA'] + agama_cols]
 
     def add_kia_filters(self, df):
         """Filter khusus untuk lembar KIA"""
         st.sidebar.subheader("Filter Data KIA")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Filter Status KIA - be more flexible
-        status_keywords = ['MEMILIKI KIA', 'BELUM MEMILIKI KIA', 'MEMILIKI', 'BELUM MEMILIKI']
-        
-        # Find available statuses
-        available_status = []
-        for status in status_keywords:
-            if any(status.lower() in col.lower() for col in all_columns):
-                available_status.append(status)
-        
-        # Fallback if none found
-        if not available_status:
-            # Find columns that might contain KIA-related information
-            available_status = [col for col in all_columns if 'kia' in col.lower() and col not in ['KECAMATAN', 'DESA']]
-            if not available_status:
-                available_status = [col for col in all_columns if col not in ['KECAMATAN', 'DESA']]
-        
+        # Filter Status KIA
+        status_options = ['MEMILIKI KIA', 'BELUM MEMILIKI KIA']
         selected_status = st.sidebar.multiselect(
             "Pilih Status KIA",
-            options=available_status,
-            default=[available_status[0]] if available_status else []
+            options=status_options,
+            default=['MEMILIKI KIA']
         )
         
-        # Filter Jenis Kelamin - be more flexible
-        gender_keywords = ['LK', 'PR', 'LAKI', 'PRIA', 'WANITA', 'PEREMPUAN']
-        
-        # Find columns with gender indicators
-        available_genders = []
-        for gender in gender_keywords:
-            if any(gender.lower() in col.lower() for col in all_columns):
-                available_genders.append(gender)
-        
-        # Fallback if no standard genders found
-        if not available_genders:
-            available_genders = ['LK', 'PR']
-            
+        # Filter Jenis Kelamin
+        gender_options = ['LK', 'PR']
         selected_gender = st.sidebar.multiselect(
             "Pilih Jenis Kelamin",
-            options=available_genders,
-            default=available_genders
+            options=gender_options,
+            default=gender_options
         )
         
         # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
         
-        # Kolom yang akan digunakan - more flexible approach
+        # Kolom yang akan digunakan
         status_cols = []
-        
-        # Standard approach - look for status and gender combinations
         for status in selected_status:
-            for gender in selected_gender:
-                # Look for exact match first
-                exact_matches = [col for col in all_columns if 
-                               (f"{gender} ({status})" == col or
-                                status.lower() in col.lower() and gender.lower() in col.lower())]
-                status_cols.extend(exact_matches)
+            status_cols.extend([f'{gender} ({status})' for gender in selected_gender])
         
-        # Fallback: If no exact matches, look for columns containing either status or gender
-        if not status_cols:
-            broader_matches = [col for col in all_columns if 
-                             (any(status.lower() in col.lower() for status in selected_status) or
-                              any(gender.lower() in col.lower() for gender in selected_gender))
-                             and col not in ['KECAMATAN', 'DESA']]
-            status_cols.extend(broader_matches)
-        
-        # Ultimate fallback: Use all numeric columns
-        if not status_cols:
-            status_cols = [col for col in df.select_dtypes(include=['float64', 'int64']).columns 
-                          if col not in ['KECAMATAN', 'DESA']]
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + status_cols]
+        return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
 
     def add_kartu_keluarga_filters(self, df):
         """Filter khusus untuk lembar Kartu Keluarga"""
         st.sidebar.subheader("Filter Data Kartu Keluarga")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Show all columns for debugging
-        if st.sidebar.checkbox("Show all KK columns"):
-            st.sidebar.write(all_columns)
-        
-        # Filter Data yang akan ditampilkan - find from available columns
-        data_keywords = ['JML KEP. KELUARGA', 'JUMLAH PENDUDUK', 'KAWIN', 'BELUM KAWIN', 'CERAI']
-        
-        # Find what categories are available in the data
-        available_data = []
-        for keyword in data_keywords:
-            if any(keyword.lower() in col.lower() for col in all_columns):
-                available_data.append(keyword)
-        
-        # Fallback if none found
-        if not available_data:
-            # Extract potential data types from column names
-            potential_data = set()
-            for col in all_columns:
-                if '(' in col and ')' in col:
-                    try:
-                        data_type = col.split('(')[1].split(')')[0].strip()
-                        potential_data.add(data_type)
-                    except:
-                        pass
-            
-            available_data = list(potential_data)
-            if not available_data:
-                available_data = ['DATA']
-        
+        # Filter Data yang akan ditampilkan
+        data_options = ['JML KEP. KELUARGA', 'JUMLAH PENDUDUK']
         selected_data = st.sidebar.selectbox(
             "Pilih Jenis Data",
-            options=available_data,
+            options=data_options,
             index=0
         )
         
-        # Filter Jenis Kelamin - be more flexible
-        gender_keywords = ['LK', 'PR', 'JUMLAH', 'LAKI', 'PRIA', 'WANITA', 'PEREMPUAN']
-        
-        # Find columns with gender indicators
-        available_genders = []
-        for gender in gender_keywords:
-            if any(gender.lower() in col.lower() for col in all_columns):
-                available_genders.append(gender)
-        
-        # Fallback if no standard genders found
-        if not available_genders:
-            available_genders = ['LK', 'PR', 'JUMLAH']
-            
+        # Filter Jenis Kelamin
+        gender_options = ['LK', 'PR', 'JUMLAH']
         selected_gender = st.sidebar.multiselect(
             "Pilih Jenis Kelamin",
-            options=available_genders,
-            default=available_genders
+            options=gender_options,
+            default=gender_options
         )
         
         # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
         
-        # Kolom yang akan digunakan - more flexible approach
+        # Kolom yang akan digunakan
         columns_to_use = []
-        
-        # Look for columns that might match the criteria
         for gender in selected_gender:
-            # First try exact format match
-            exact_match = f"{gender} ({selected_data})"
-            if exact_match in all_columns:
-                columns_to_use.append(exact_match)
-            else:
-                # Look for columns containing both gender and data type
-                broader_matches = [col for col in all_columns if 
-                                 gender.lower() in col.lower() and selected_data.lower() in col.lower()]
-                columns_to_use.extend(broader_matches)
+            column_name = f"{gender} ({selected_data})"
+            if column_name in df.columns:
+                columns_to_use.append(column_name)
         
-        # If "KK KAWIN" specific sheet, look for additional columns
-        if "KAWIN" in selected_data or any("KAWIN" in col.upper() for col in all_columns):
-            kawin_cols = [col for col in all_columns if "KAWIN" in col.upper() and col not in columns_to_use]
-            columns_to_use.extend(kawin_cols)
-        
-        # Fallback: If no columns selected, use all numeric columns
-        if not columns_to_use:
-            columns_to_use = [col for col in df.select_dtypes(include=['float64', 'int64']).columns 
-                            if col not in ['KECAMATAN', 'DESA']]
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + columns_to_use]
+        return filtered_df[['KECAMATAN', 'DESA'] + columns_to_use]
 
     def add_penduduk_filters(self, df):
         """Filter khusus untuk lembar Penduduk"""
         st.sidebar.subheader("Filter Data Penduduk")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        kecamatan_list = df['KECAMATAN'].unique()
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
             default=kecamatan_list
         )
         
-        # Get all columns to analyze what's available
-        all_columns = df.columns.tolist()
-        
-        # Filter Jenis Kelamin - be more flexible
-        gender_keywords = ['LAKI-LAKI', 'PEREMPUAN', 'TOTAL', 'LK', 'PR', 'JUMLAH']
-        
-        # Find available genders
-        available_genders = []
-        for gender in gender_keywords:
-            if any(gender.lower() in col.lower() for col in all_columns):
-                available_genders.append(gender)
-        
-        # Fallback if none found
-        if not available_genders:
-            available_genders = ['TOTAL']
-            
+        # Filter Jenis Kelamin
+        gender_options = ['LAKI-LAKI', 'PEREMPUAN', 'TOTAL']
         selected_gender = st.sidebar.multiselect(
             "Pilih Jenis Kelamin",
-            options=available_genders,
-            default=['TOTAL'] if 'TOTAL' in available_genders else available_genders[:1]
+            options=gender_options,
+            default=['TOTAL']
         )
         
-        # Filter Kelompok Usia
-        usia_cols = [col for col in all_columns if 'USIA' in col.upper()]
-        
-        if usia_cols:
+        # Filter Kelompok Usia (jika ada)
+        if any('USIA' in col for col in df.columns):
+            usia_groups = [col for col in df.columns if 'USIA' in col]
             selected_usia = st.sidebar.multiselect(
                 "Pilih Kelompok Usia",
-                options=usia_cols,
+                options=usia_groups,
                 default=[]
             )
         else:
             selected_usia = []
         
         # Terapkan filter
-        if 'KECAMATAN' in df.columns and selected_kecamatan:
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-        else:
-            filtered_df = df
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
         
-        # Kolom yang akan digunakan - more flexible approach
-        gender_cols = []
-        for gender in selected_gender:
-            matches = [col for col in all_columns if gender.lower() in col.lower()]
-            gender_cols.extend(matches)
+        # Kolom yang akan digunakan
+        gender_cols = [col for col in df.columns if any(gender in col.upper() for gender in selected_gender)]
+        usia_cols = selected_usia if selected_usia else []
         
-        # Fallback: If no gender columns selected, use all non-base columns
-        if not gender_cols:
-            gender_cols = [col for col in all_columns if col not in ['KECAMATAN', 'DESA']]
+        selected_cols = gender_cols + usia_cols
         
-        # Add selected usia columns
-        selected_cols = list(set(gender_cols + selected_usia))
-        
-        # Always include KECAMATAN and DESA if they exist
-        base_cols = [col for col in ['KECAMATAN', 'DESA'] if col in df.columns]
-        
-        # Return filtered dataframe with selected columns
-        return filtered_df[base_cols + selected_cols]
+        return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
         
     def add_kelompok_umur_filters(self, df):
         """Filter khusus untuk lembar Kelompok Umur"""
@@ -597,19 +304,571 @@ class MadiunDataVisualizer:
         for col in df.columns:
             if col not in ['KECAMATAN', 'DESA']:
                 # Deteksi pola kolom umur (misalnya "0-4", "5-9", "10-14", dll.)
-                if '-' in col or 'TAHUN' in col.upper() or 'THN' in col.upper():
-                    umur_cols.append(col)
-                # Consider numeric cols if pattern not found
-                elif col.replace('.', '', 1).isdigit():
+                if isinstance(col, str) and ('-' in col or 'TAHUN' in col.upper() or 'THN' in col.upper()):
                     umur_cols.append(col)
         
         # Jika terlalu banyak kelompok umur, buat kategori
         if len(umur_cols) > 10:
             # Kelompokkan berdasarkan rentang
             umur_categories = {
-                'Balita (0-4 tahun)': [col for col in umur_cols if '0-4' in col or '0 - 4' in col or '0-5' in col],
-                'Anak-anak (5-14 tahun)': [col for col in umur_cols if any(x in col for x in ['5-9', '5 - 9', '10-14', '10 - 14', '5-14', '6-14'])],
-                'Remaja (15-24 tahun)': [col for col in umur_cols if any(x in col for x in ['15-19', '15 - 19', '20-24', '20 - 24', '15-24'])],
-                'Dewasa Muda (25-34 tahun)': [col for col in umur_cols if any(x in col for x in ['25-29', '25 - 29', '30-34', '30 - 34', '25-34'])],
-                'Dewasa (35-54 tahun)': [col for col in umur_cols if any(x in col for x in ['35-39', '35 - 39', '40-44', '40 - 44', '45-49', '45 - 49', '50-54', '50 - 54', '35-54'])],
-                'Lansia (55+ tahun)': [col for col in umur_cols if any(x in col for x in ['55-59', '55 - 59', '60-64', '60 - 64', '65-69', '65 - 69', '70-74', '70 - 74', '75+', '75 +', '55+', '60+'])]}
+                'Balita (0-4 tahun)': [col for col in umur_cols if '0-4' in col or '0 - 4' in col],
+                'Anak-anak (5-14 tahun)': [col for col in umur_cols if any(x in col for x in ['5-9', '5 - 9', '10-14', '10 - 14'])],
+                'Remaja (15-24 tahun)': [col for col in umur_cols if any(x in col for x in ['15-19', '15 - 19', '20-24', '20 - 24'])],
+                'Dewasa Muda (25-34 tahun)': [col for col in umur_cols if any(x in col for x in ['25-29', '25 - 29', '30-34', '30 - 34'])],
+                'Dewasa (35-54 tahun)': [col for col in umur_cols if any(x in col for x in ['35-39', '35 - 39', '40-44', '40 - 44', '45-49', '45 - 49', '50-54', '50 - 54'])],
+                'Lansia (55+ tahun)': [col for col in umur_cols if any(x in col for x in ['55-59', '55 - 59', '60-64', '60 - 64', '65-69', '65 - 69', '70-74', '70 - 74', '75+', '75 +'])]
+            }
+            
+            # Pilih kategori umur
+            selected_category = st.sidebar.selectbox(
+                "Pilih Kategori Umur",
+                options=list(umur_categories.keys())
+            )
+            
+            available_umur_options = umur_categories[selected_category]
+        else:
+            available_umur_options = umur_cols
+        
+        # Filter Kelompok Umur
+        selected_umur = st.sidebar.multiselect(
+            "Pilih Kelompok Umur",
+            options=available_umur_options,
+            default=available_umur_options[:5] if len(available_umur_options) > 5 else available_umur_options
+        )
+        
+        # Filter Jenis Tampilan
+        display_options = ['Jumlah Absolut', 'Persentase']
+        selected_display = st.sidebar.radio(
+            "Jenis Tampilan",
+            options=display_options
+        )
+        
+        # Terapkan filter
+        if 'KECAMATAN' in df.columns:
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        else:
+            filtered_df = df
+        
+        # Jika pilihan tampilan adalah persentase, hitung persentase
+        if selected_display == 'Persentase' and selected_umur:
+            # Hitung total untuk setiap baris
+            filtered_df = filtered_df.copy()
+            row_totals = filtered_df[selected_umur].sum(axis=1)
+            
+            # Hitung persentase untuk kolom yang dipilih
+            for col in selected_umur:
+                filtered_df[f'{col} (%)'] = (filtered_df[col] / row_totals * 100).round(2)
+            
+            # Gunakan kolom persentase
+            selected_cols = [f'{col} (%)' for col in selected_umur]
+            
+            # Kembalikan dataframe dengan kolom yang dipilih
+            if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
+                return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
+            elif 'KECAMATAN' in df.columns:
+                return filtered_df[['KECAMATAN'] + selected_cols]
+            else:
+                return filtered_df[selected_cols]
+        else:
+            # Kembalikan dataframe dengan jumlah absolut
+            if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
+                return filtered_df[['KECAMATAN', 'DESA'] + selected_umur]
+            elif 'KECAMATAN' in df.columns:
+                return filtered_df[['KECAMATAN'] + selected_umur]
+            else:
+                return filtered_df[selected_umur]
+
+    def add_pendidikan_filters(self, df):
+        """Filter khusus untuk lembar Pendidikan"""
+        st.sidebar.subheader("Filter Data Pendidikan")
+        
+        # Filter Kecamatan
+        kecamatan_list = df['KECAMATAN'].unique()
+        selected_kecamatan = st.sidebar.multiselect(
+            "Pilih Kecamatan",
+            options=kecamatan_list,
+            default=kecamatan_list
+        )
+        
+        # Filter Jenjang Pendidikan
+        pendidikan_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
+        selected_pendidikan = st.sidebar.multiselect(
+            "Pilih Jenjang Pendidikan",
+            options=pendidikan_list,
+            default=pendidikan_list[:3] if len(pendidikan_list) > 3 else pendidikan_list
+        )
+        
+        # Terapkan filter
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        
+        return filtered_df[['KECAMATAN', 'DESA'] + selected_pendidikan]
+
+    def add_pekerjaan_filters(self, df):
+        """Filter khusus untuk lembar Pekerjaan"""
+        st.sidebar.subheader("Filter Data Pekerjaan")
+        
+        # Filter Kecamatan
+        kecamatan_list = df['KECAMATAN'].unique()
+        selected_kecamatan = st.sidebar.multiselect(
+            "Pilih Kecamatan",
+            options=kecamatan_list,
+            default=kecamatan_list
+        )
+        
+        # Filter Jenis Pekerjaan
+        pekerjaan_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
+        
+        # Kelompokkan pekerjaan jika terlalu banyak
+        if len(pekerjaan_list) > 10:
+            # Buat grouping berdasarkan kata kunci umum
+            pekerjaan_groups = {
+                'PERTANIAN': [col for col in pekerjaan_list if any(k in col.upper() for k in ['TANI', 'NELAYAN', 'TERNAK'])],
+                'PENDIDIKAN': [col for col in pekerjaan_list if any(k in col.upper() for k in ['GURU', 'DOSEN', 'PENDIDIK'])],
+                'KESEHATAN': [col for col in pekerjaan_list if any(k in col.upper() for k in ['DOKTER', 'PERAWAT', 'BIDAN'])],
+                'PERDAGANGAN': [col for col in pekerjaan_list if any(k in col.upper() for k in ['DAGANG', 'JUAL', 'WIRASWASTA'])],
+                'INDUSTRI': [col for col in pekerjaan_list if any(k in col.upper() for k in ['BURUH', 'KARYAWAN', 'PEGAWAI'])],
+                'LAINNYA': [col for col in pekerjaan_list if not any(k in col.upper() for k in ['TANI', 'NELAYAN', 'TERNAK', 'GURU', 'DOSEN', 'PENDIDIK', 'DOKTER', 'PERAWAT', 'BIDAN', 'DAGANG', 'JUAL', 'WIRASWASTA', 'BURUH', 'KARYAWAN', 'PEGAWAI'])]
+            }
+            
+            selected_group = st.sidebar.selectbox(
+                "Pilih Kelompok Pekerjaan",
+                options=list(pekerjaan_groups.keys())
+            )
+            
+            pekerjaan_options = pekerjaan_groups[selected_group]
+        else:
+            pekerjaan_options = pekerjaan_list
+        
+        selected_pekerjaan = st.sidebar.multiselect(
+            "Pilih Jenis Pekerjaan",
+            options=pekerjaan_options,
+            default=pekerjaan_options[:5] if len(pekerjaan_options) > 5 else pekerjaan_options
+        )
+        
+        # Terapkan filter
+        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        
+        return filtered_df[['KECAMATAN', 'DESA'] + selected_pekerjaan]
+
+    def add_perkawinan_filters(self, df):
+        """Filter khusus untuk lembar Status Perkawinan atau KK KAWIN"""
+        st.sidebar.subheader("Filter Data Status Perkawinan")
+        
+        # Filter Kecamatan
+        kecamatan_list = df['KECAMATAN'].unique()
+        selected_kecamatan = st.sidebar.multiselect(
+            "Pilih Kecamatan",
+            options=kecamatan_list,
+            default=kecamatan_list
+        )
+        
+        # Detect if this is a PERKAWINAN or KK KAWIN sheet by column names
+        # Common status categories across both formats
+        status_categories = ['BELUM KAWIN', 'KAWIN', 'CERAI HIDUP', 'CERAI MATI']
+        
+        # First identify if columns contain gender breakdown (LK, PR, JML)
+        has_gender_breakdown = any(str(col).startswith('LK') or str(col).startswith('PR') or str(col).startswith('JML') 
+                                for col in df.columns)
+        
+        if has_gender_breakdown:
+            # This is the KK KAWIN or PERKAWINAN format with gender breakdown
+            # Filter Status Perkawinan
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Perkawinan",
+                options=status_categories,
+                default=status_categories
+            )
+            
+            # Filter Jenis Kelamin
+            gender_options = ['LK', 'PR', 'JML']
+            selected_gender = st.sidebar.multiselect(
+                "Pilih Jenis Kelamin",
+                options=gender_options,
+                default=gender_options
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Build column selections based on both status and gender
+            status_cols = []
+            for gender in selected_gender:
+                for status in selected_status:
+                    col_name = f"{gender} ({status})"
+                    if col_name in df.columns:
+                        status_cols.append(col_name)
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
+        else:
+            # Old PERKAWINAN format without gender breakdown
+            # Filter Status Perkawinan (use all numeric columns as options)
+            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+            status_list = [col for col in numeric_cols if col not in ['KECAMATAN', 'DESA']]
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Perkawinan",
+                options=status_list,
+                default=status_list
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + selected_status]
+
+    def visualize_filtered_data(self, df, sheet_name):
+        """Visualisasi data yang sudah difilter"""
+        # Make a copy of the dataframe to avoid modifying the original
+        df_copy = df.copy()
+        
+        # Convert any non-string column names to string to avoid errors
+        df_copy.columns = [str(col) for col in df_copy.columns]
+        
+        # First, preprocess the dataframe to handle potential issues
+        # Ensure KECAMATAN and DESA columns exist (for grouping)
+        if 'KECAMATAN' not in df_copy.columns:
+            st.warning("Kolom KECAMATAN tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
+            df_copy['KECAMATAN'] = 'Unknown'
+        
+        if 'DESA' not in df_copy.columns:
+            st.warning("Kolom DESA tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
+            df_copy['DESA'] = 'Unknown'
+        
+        # Apply appropriate filter based on sheet name
+        # Check multiple variants of names to handle different Excel formats
+        if any(akta_keyword in sheet_name.upper() for akta_keyword in ['AKTA', 'AKTA 0', 'AKTA 0 SD 17']):
+            filtered_df = self.add_akta_filters(df_copy)
+        elif 'KTP' in sheet_name.upper():
+            filtered_df = self.add_ktp_filters(df_copy)
+        elif 'AGAMA' in sheet_name.upper():
+            filtered_df = self.add_agama_filters(df_copy)
+        elif 'KIA' in sheet_name.upper():
+            filtered_df = self.add_kia_filters(df_copy)
+        elif any(kk_keyword in sheet_name.upper() for kk_keyword in ['KARTU KELUARGA', 'KK']):
+            # Make sure it's actually KK data and not KK KAWIN data
+            if 'KAWIN' not in sheet_name.upper():
+                filtered_df = self.add_kartu_keluarga_filters(df_copy)
+            else:  # This is for KK KAWIN sheets
+                filtered_df = self.add_perkawinan_filters(df_copy)
+        elif 'PENDUDUK' in sheet_name.upper():
+            filtered_df = self.add_penduduk_filters(df_copy)
+        elif 'PENDIDIKAN' in sheet_name.upper():
+            filtered_df = self.add_pendidikan_filters(df_copy)
+        elif 'PEKERJAAN' in sheet_name.upper():
+            filtered_df = self.add_pekerjaan_filters(df_copy)
+        elif any(kawin_keyword in sheet_name.upper() for kawin_keyword in ['PERKAWINAN', 'KAWIN']):
+            filtered_df = self.add_perkawinan_filters(df_copy)
+        elif any(umur_keyword in sheet_name.upper() for umur_keyword in ['KEL UMUR', 'KELOMPOK UMUR', 'UMUR']):
+            filtered_df = self.add_kelompok_umur_filters(df_copy)
+        else:
+            st.warning(f"Tidak ada filter khusus untuk lembar {sheet_name}")
+            filtered_df = df_copy
+        
+        # Tampilkan data yang sudah difilter
+        st.subheader(f"Data Terfilter - {sheet_name}")
+        st.dataframe(filtered_df, use_container_width=True)
+        
+        # Visualisasi berdasarkan jenis lembar
+        numeric_cols = filtered_df.select_dtypes(include=['float64', 'int64']).columns
+        
+        if len(numeric_cols) > 0:
+            # Agregasi data per kecamatan untuk visualisasi yang lebih jelas
+            agg_df = filtered_df.groupby('KECAMATAN')[numeric_cols].sum().reset_index()
+            
+            # Bar chart
+            fig_bar = px.bar(
+                agg_df,
+                x='KECAMATAN',
+                y=numeric_cols,
+                title=f'Visualisasi Data {sheet_name} per Kecamatan',
+                barmode='group',
+                height=600
+            )
+            # Rotasi label x untuk kecamatan agar lebih mudah dibaca
+            fig_bar.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Visualisasi tambahan untuk data tertentu
+            if len(numeric_cols) <= 10:  # Jika kolom tidak terlalu banyak
+                # Pie chart untuk total
+                total_values = agg_df[numeric_cols].sum()
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=total_values.index,
+                    values=total_values.values,
+                    textinfo='percent+value',
+                    hole=0.3,  
+                    )])
+            fig_pie.update_layout(
+            title=f'Distribusi Total - {sheet_name}',
+            height=500
+                )
+            st.plotly_chart(fig_pie, use_container_width=True)
+            
+            # Heatmap untuk perbandingan antar kecamatan
+            if len(agg_df['KECAMATAN']) > 1 and len(numeric_cols) > 1:
+                # Normalisasi data untuk heatmap yang lebih intuitif
+                pivot_df = agg_df.set_index('KECAMATAN')
+                
+                # Membuat heatmap dengan colorscales yang lebih jelas
+                fig_heatmap = px.imshow(
+                    pivot_df,
+                    labels=dict(x="Kategori", y="Kecamatan", color="Jumlah"),
+                    title=f"Heatmap Data {sheet_name} per Kecamatan",
+                    color_continuous_scale='Viridis',
+                    aspect="auto",  # Menyesuaikan aspek rasio untuk ukuran layar
+                    height=500
+                )
+                st.plotly_chart(fig_heatmap, use_container_width=True)
+                
+                # Tambahkan visualisasi khusus untuk lembar tertentu
+                if 'AKTA' in sheet_name.upper():
+                    # For AKTA sheets, show ownership percentage
+                    memiliki_cols = [col for col in pivot_df.columns if 'MEMILIKI' in str(col) and 'BELUM' not in str(col)]
+                    belum_cols = [col for col in pivot_df.columns if 'BELUM MEMILIKI' in str(col)]
+                    
+                    if memiliki_cols and belum_cols:
+                        try:
+                            ratio_df = pd.DataFrame()
+                            ratio_df['% Memiliki'] = pivot_df[memiliki_cols].sum(axis=1) / (pivot_df[memiliki_cols].sum(axis=1) + pivot_df[belum_cols].sum(axis=1)) * 100
+                            ratio_df['% Belum Memiliki'] = 100 - ratio_df['% Memiliki']
+                            
+                            fig_ratio = px.bar(
+                                ratio_df.reset_index(),
+                                x='KECAMATAN',
+                                y=['% Memiliki', '% Belum Memiliki'],
+                                title="Persentase Kepemilikan Akta per Kecamatan",
+                                barmode='stack',
+                                height=500
+                            )
+                            fig_ratio.update_layout(xaxis_tickangle=-45)
+                            st.plotly_chart(fig_ratio, use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"Tidak dapat membuat visualisasi persentase: {str(e)}")
+                            
+                elif 'KK KAWIN' in sheet_name.upper() or 'PERKAWINAN' in sheet_name.upper():
+                    # Special visualization for KK KAWIN or PERKAWINAN
+                    try:
+                        if any('KAWIN' in str(col) for col in pivot_df.columns):
+                            # Group columns by marital status
+                            status_groups = {
+                                'BELUM KAWIN': [col for col in pivot_df.columns if 'BELUM KAWIN' in str(col)],
+                                'KAWIN': [col for col in pivot_df.columns if ' KAWIN' in str(col) and 'BELUM' not in str(col)],
+                                'CERAI HIDUP': [col for col in pivot_df.columns if 'CERAI HIDUP' in str(col)],
+                                'CERAI MATI': [col for col in pivot_df.columns if 'CERAI MATI' in str(col)]
+                            }
+                            
+                            # Calculate totals for each status group
+                            status_totals = {}
+                            for status, cols in status_groups.items():
+                                if cols:
+                                    status_totals[status] = pivot_df[cols].sum(axis=1)
+                            
+                            if status_totals:
+                                ratio_df = pd.DataFrame(status_totals)
+                                row_totals = ratio_df.sum(axis=1)
+                                
+                                # Calculate percentages
+                                for col in ratio_df.columns:
+                                    ratio_df[f'% {col}'] = (ratio_df[col] / row_totals * 100).round(2)
+                                
+                                # Keep only percentage columns for visualization
+                                pct_cols = [col for col in ratio_df.columns if col.startswith('%')]
+                                
+                                if pct_cols:
+                                    fig_pct = px.bar(
+                                        ratio_df.reset_index(),
+                                        x='KECAMATAN',
+                                        y=pct_cols,
+                                        title="Distribusi Status Perkawinan per Kecamatan (%)",
+                                        barmode='stack',
+                                        height=500
+                                    )
+                                    fig_pct.update_layout(xaxis_tickangle=-45)
+                                    st.plotly_chart(fig_pct, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Tidak dapat membuat visualisasi status perkawinan: {str(e)}")
+                    
+                # Visualisasi untuk kartu keluarga jika relevan
+                elif ('KARTU KELUARGA' in sheet_name.upper() or 'KK' in sheet_name.upper()) and 'KAWIN' not in sheet_name.upper():
+                    # Jika data kartu keluarga, tambahkan visualisasi persentase
+                    if ('LK (JML KEP. KELUARGA)' in pivot_df.columns and 
+                        'PR (JML KEP. KELUARGA)' in pivot_df.columns and
+                        'JUMLAH (JML KEP. KELUARGA)' in pivot_df.columns):
+                        
+                        # Hitung persentase kepala keluarga laki-laki dan perempuan
+                        ratio_df = pd.DataFrame()
+                        ratio_df['% KK Laki-laki'] = pivot_df['LK (JML KEP. KELUARGA)'] / pivot_df['JUMLAH (JML KEP. KELUARGA)'] * 100
+                        ratio_df['% KK Perempuan'] = pivot_df['PR (JML KEP. KELUARGA)'] / pivot_df['JUMLAH (JML KEP. KELUARGA)'] * 100
+                        
+                        # Visualisasi persentase
+                        fig_ratio = px.bar(
+                            ratio_df.reset_index(),
+                            x='KECAMATAN',
+                            y=['% KK Laki-laki', '% KK Perempuan'],
+                            title="Persentase Kepala Keluarga Berdasarkan Gender",
+                            barmode='stack',
+                            height=500
+                        )
+                        fig_ratio.update_layout(xaxis_tickangle=-45)
+                        st.plotly_chart(fig_ratio, use_container_width=True)
+        else:
+            st.warning("Tidak ada kolom numerik untuk divisualisasikan")
+
+def main():
+    st.set_page_config(
+        page_title="Visualisasi Data Madiun",
+        page_icon="📊",
+        layout="wide"
+    )
+    
+    st.title("📊 Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
+    
+    # Membuat tab untuk navigasi (tanpa tab perbandingan)
+    tab1, tab2 = st.tabs(["Visualisasi Data", "Tentang Aplikasi"])
+    
+    # File selection and handling
+    st.sidebar.header("Pilihan File Data")
+    
+    # Check for available files
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    available_files = []
+    
+    # Check for hardcoded files with both naming patterns
+    file1_paths = [
+        os.path.join(current_dir, "STAT_SMT_I_2024.xlsx"),
+        os.path.join(current_dir, "STAT_SMT_1_2024.xlsx")
+    ]
+    
+    file2_paths = [
+        os.path.join(current_dir, "STAT_SMT_2_2024.xlsx"),
+        os.path.join(current_dir, "STAT_SMT_II_2024.xlsx")
+    ]
+    
+    # Check first semester file
+    for file_path in file1_paths:
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            available_files.append(filename)
+            break
+    
+    # Check second semester file
+    for file_path in file2_paths:
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            available_files.append(filename)
+            break
+    
+    # Option to upload a custom file
+    uploaded_file = st.sidebar.file_uploader("Unggah File Excel", type=['xlsx', 'xls'])
+    
+    # File selection radio button (only show if there are available files)
+    file_path = None
+    
+    if uploaded_file:
+        file_path = uploaded_file
+        st.sidebar.success(f"Menggunakan file yang diunggah: {uploaded_file.name}")
+    elif available_files:
+        file_selection = st.sidebar.radio(
+            "Pilih File Data:",
+            options=["Unggah File Baru"] + available_files,
+            index=1 if available_files else 0
+        )
+        
+        if file_selection == "Unggah File Baru":
+            st.sidebar.info("Silakan unggah file Excel di bagian atas sidebar")
+            if not uploaded_file:
+                # If no file is uploaded, use the first available file as default
+                if available_files:
+                    file_path = os.path.join(current_dir, available_files[0])
+                    st.sidebar.info(f"Menggunakan file default: {available_files[0]}")
+        else:
+            file_path = os.path.join(current_dir, file_selection)
+            st.sidebar.success(f"Menggunakan file: {file_selection}")
+    else:
+        st.error("Tidak ada file data ditemukan. Silakan unggah file Excel.")
+        return
+    
+    try:
+        visualizer = MadiunDataVisualizer(file_path)
+        sheet_names = visualizer.xls.sheet_names
+        
+        with tab1:
+            st.sidebar.header("Pengaturan Visualisasi")
+            selected_sheet = st.sidebar.selectbox(
+                "Pilih Lembar yang Akan Divisualisasikan",
+                options=sheet_names
+            )
+            
+            # Cek apakah sheet ditemukan
+            if selected_sheet not in sheet_names:
+                st.error(f"Lembar {selected_sheet} tidak ditemukan dalam file")
+                return
+            
+            df = pd.read_excel(file_path, sheet_name=selected_sheet)
+            
+            # Tampilkan data mentah (opsional)
+            if st.sidebar.checkbox("Tampilkan Data Mentah"):
+                st.subheader(f"Data Mentah - {selected_sheet}")
+                st.dataframe(df, use_container_width=True)
+            
+            # Visualisasi dengan filter
+            visualizer.visualize_filtered_data(df, selected_sheet)
+        
+        with tab2:
+            # Informasi tentang aplikasi
+            st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
+            
+            st.markdown("""
+            ### Deskripsi
+            Aplikasi ini dikembangkan untuk memvisualisasikan data kependudukan di Kabupaten Madiun.
+            Dengan aplikasi ini, pengguna dapat melihat berbagai informasi kependudukan seperti:
+            
+            - Data Akta Kelahiran
+            - Data KTP Elektronik
+            - Data Kartu Identitas Anak (KIA)
+            - Data Agama
+            - Data Kartu Keluarga
+            - Data Penduduk
+            - Data Pendidikan
+            - Data Pekerjaan
+            - Data Status Perkawinan
+            
+            ### Petunjuk Penggunaan
+            1. Pilih file data yang ingin digunakan dari sidebar
+            2. Pilih lembar data yang ingin divisualisasikan
+            3. Sesuaikan filter yang tersedia
+            4. Lihat hasil visualisasi dalam bentuk tabel dan grafik
+            
+            ### Sumber Data
+            Data yang digunakan dalam aplikasi ini bersumber dari Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun.
+            """)
+            
+            # Tampilkan metadata file
+            if st.checkbox("Tampilkan Metadata File"):
+                st.subheader("Metadata File")
+                
+                file_name = ""
+                if isinstance(file_path, str):
+                    file_name = os.path.basename(file_path)
+                else:
+                    file_name = uploaded_file.name
+                    
+                metadata = {
+                    "Nama File": file_name,
+                    "Jumlah Lembar": len(sheet_names),
+                    "Daftar Lembar": ", ".join(sheet_names)
+                }
+                
+                st.json(metadata)
+                
+                # Tampilkan informasi perbandingan jika ada dua file yang tersedia
+                if len(available_files) >= 2:
+                    st.subheader("Informasi File Data")
+                    st.info(f"Tersedia {len(available_files)} file data: {', '.join(available_files)}")
+                    st.write("Anda dapat beralih antara file di sidebar untuk melihat data dari periode yang berbeda.")
+    
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {str(e)}")
+        st.exception(e)
+
+if __name__ == "__main__":
+    main()
