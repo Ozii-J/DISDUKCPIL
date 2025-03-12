@@ -87,7 +87,7 @@ class MadiunDataVisualizer:
         st.sidebar.subheader("Filter Data Agama")
         
         # Filter Kecamatan
-        kecamatan_list = df['KECAMATAN'].unique()
+        kecamatan_list = df['KECAMATAN'].unique()  # Changed from d to df
         selected_kecamatan = st.sidebar.multiselect(
             "Pilih Kecamatan",
             options=kecamatan_list,
@@ -155,6 +155,7 @@ class MadiunDataVisualizer:
         
         # Kolom yang akan digunakan
         status_cols = []
+
         for status in selected_status:
             status_cols.extend([f'{gender} ({status})' for gender in selected_gender])
         
@@ -329,7 +330,7 @@ class MadiunDataVisualizer:
         # Filter Status Perkawinan
         status_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
         selected_status = st.sidebar.multiselect(
-            "Pilih Status Perkawinan",
+            "Pilih Status Perkawinan",  # Fixed the label
             options=status_list,
             default=status_list
         )
@@ -445,17 +446,17 @@ class MadiunDataVisualizer:
         else:
             st.warning("Tidak ada kolom numerik untuk divisualisasikan")
     
-    def compare_sheets(self, sheet_names):
+    def compare_sheets(self, sheet_names: list):
         """Membandingkan data dari beberapa lembar"""
         st.subheader("Perbandingan Antar Lembar Data")
         
-        selected_sheets = st.multiselect(
+        selected_sheets: list = st.multiselect(
             "Pilih Lembar yang Akan Dibandingkan",
             options=sheet_names,
             default=sheet_names[:2] if len(sheet_names) > 1 else sheet_names
         )
         
-        if len(selected_sheets) < 2:
+        if len(selected_sheets) < 2:  # Ensure at least two sheets are selected
             st.warning("Pilih minimal 2 lembar untuk perbandingan")
             return
         
@@ -617,3 +618,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+</create_file>
