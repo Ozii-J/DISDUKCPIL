@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- Background -->
+  <rect width="800" height="600" fill="#f0f2f6" />
+  
+  <!-- Card container -->
+  <rect x="200" y="50" width="400" height="500" rx="10" ry="10" fill="white" stroke="#e0e0e0" stroke-width="1" />
+  
+  <!-- Madiun Logo -->
+  <g transform="translate(300, 100) scale(0.4)">
+    <!-- Logo Shield -->
+    <path d="M250,50 C350,50 450,100 500,200 C550,300 500,400 400,450 C300,500 200,450 150,350 C100,250 150,50 250,50 Z" fill="#f0c61e" stroke="#000" stroke-width="2" />
+    
+    <!-- Inner Shield -->
+    <path d="M250,75 C330,75 410,115 450,195 C490,275 450,355 370,395 C290,435 210,395 170,315 C130,235 170,75 250,75 Z" fill="#1e1e1e" />
+    
+    <!-- Tree Symbol -->
+    <path d="M250,125 Q300,150 300,200 Q300,250 250,275 Q200,250 200,200 Q200,150 250,125 Z" fill="#00aa44" />
+    
+    <!-- Wings Symbol -->
+    <path d="M150,300 Q200,250 250,300 Q300,250 350,300 Q325,350 250,325 Q175,350 150,300 Z" fill="#f0c61e" />
+    
+    <!-- Banner Top -->
+    <path d="M175,80 H325 Q340,80 340,95 Q340,110 325,110 H175 Q160,110 160,95 Q160,80 175,80 Z" fill="white" stroke="#000" stroke-width="2" />
+    <!-- Banner Bottom -->
+    <path d="M175,380 H325 Q340,380 340,395 Q340,410 325,410 H175 Q160,410 160,395 Q160,380 175,80 Z" fill="white" stroke="#000" stroke-width="2" />
+    
+    <!-- Text approximations -->
+    <text x="250" y="100" font-family="Arial" font-weight="bold" font-size="18" text-anchor="middle" fill="#000">KABUPATEN</text>
+    <text x="250" y="400" font-family="Arial" font-weight="bold" font-size="18" text-anchor="middle" fill="#000">MADIUN</text>
+  </g>
+  
+  <!-- Title Text -->
+  <text x="400" y="230" font-family="Arial" font-weight="bold" font-size="22" text-anchor="middle" fill="#333">DISPENDUKCAPIL KAB.MADIUN</text>
+  <text x="400" y="260" font-family="Arial" font-size="16" text-anchor="middle" fill="#666">Sistem Visualisasi Data Kependudukan</text>
+  
+  <!-- Subtitle -->
+  <text x="400" y="300" font-family="Arial" font-size="14" text-anchor="middle" fill="#666">Silakan masuk untuk melanjutkan</text>
+  
+  <!-- Username Input Field -->
+  <rect x="250" y="320" width="300" height="40" rx="5" ry="5" fill="#f7f7f7" stroke="#ddd" stroke-width="1" />
+  <text x="265" y="345" font-family="Arial" font-size="14" fill="#999">Username</text>
+  
+  <!-- Password Input Field -->
+  <rect x="250" y="375" width="300" height="40" rx="5" ry="5" fill="#f7f7f7" stroke="#ddd" stroke-width="1" />
+  <text x="265" y="400" font-family="Arial" font-size="14" fill="#999">••••••••</text>
+  
+  <!-- Buttons -->
+  <rect x="250" y="430" width="145" height="40" rx="5" ry="5" fill="#2e6da4" />
+  <text x="322" y="455" font-family="Arial" font-weight="bold" font-size="14" text-anchor="middle" fill="white">Masuk</text>
+  
+  <rect x="405" y="430" width="145" height="40" rx="5" ry="5" fill="#f0f0f0" stroke="#ddd" stroke-width="1" />
+  <text x="477" y="455" font-family="Arial" font-weight="bold" font-size="14" text-anchor="middle" fill="#666">Bantuan</text>
+  
+  <!-- Footer -->
+  <text x="400" y="500" font-family="Arial" font-size="12" text-anchor="middle" fill="#999">© 2024 Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun</text>
+</svg>
