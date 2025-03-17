@@ -10,7 +10,6 @@ class MadiunDataVisualizer:
         self.file_path = file_path
         self.xls = pd.ExcelFile(file_path)
     
-    # [All the other methods remain the same]
     def add_akta_filters(self, df):
         """Filter khusus untuk lembar AKTA"""
         st.sidebar.subheader("Filter Data AKTA")
@@ -23,29 +22,74 @@ class MadiunDataVisualizer:
             default=kecamatan_list
         )
         
-        # Filter Kategori Usia
-        usia_options = ['KESELURUHAN', '0-5 TAHUN', '0-17 TAHUN']
-        selected_usia = st.sidebar.selectbox(
-            "Pilih Kategori Usia",
-            options=usia_options
-        )
+        # Detect format of the AKTA sheet based on column names
+        is_gender_format = any('LK (MEMILIKI)' in str(col).upper() for col in df.columns)
+        is_age_format = any('(0-5 TAHUN)' in str(col).upper() for col in df.columns)
         
-        # Filter Status Kepemilikan
-        status_options = ['MEMILIKI', 'BELUM MEMILIKI']
-        selected_status = st.sidebar.multiselect(
-            "Pilih Status Kepemilikan",
-            options=status_options,
-            default=status_options
-        )
+        # Different filters based on sheet format
+        if is_age_format:
+            # First semester format (AKTA 0 SD 17 DESA)
+            # Filter Kategori Usia
+            usia_options = ['KESELURUHAN', '0-5 TAHUN', '0-17 TAHUN']
+            selected_usia = st.sidebar.selectbox(
+                "Pilih Kategori Usia",
+                options=usia_options
+            )
+            
+            # Filter Status Kepemilikan
+            status_options = ['MEMILIKI', 'BELUM MEMILIKI']
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Kepemilikan",
+                options=status_options,
+                default=status_options
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Kolom yang akan digunakan berdasarkan usia
+            cols_to_use = [col for col in df.columns if isinstance(col, str) and selected_usia.lower() in col.lower()]
+            status_cols = [col for col in cols_to_use if any(status.upper() in col.upper() for status in selected_status)]
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
         
-        # Terapkan filter
-        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        elif is_gender_format:
+            # Second semester format (AKTA with gender breakdown)
+            # Filter Jenis Kelamin
+            gender_options = ['LK', 'PR', 'JML']
+            selected_gender = st.sidebar.multiselect(
+                "Pilih Jenis Kelamin",
+                options=gender_options,
+                default=gender_options
+            )
+            
+            # Filter Status Kepemilikan
+            status_options = ['MEMILIKI', 'BELUM MEMILIKI']
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Kepemilikan",
+                options=status_options,
+                default=status_options
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Kolom yang akan digunakan
+            status_cols = []
+            for gender in selected_gender:
+                for status in selected_status:
+                    col_name = f"{gender} ({status})"
+                    if col_name in df.columns:
+                        status_cols.append(col_name)
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
         
-        # Kolom yang akan digunakan berdasarkan usia
-        cols_to_use = [col for col in df.columns if selected_usia.lower() in col.lower()]
-        status_cols = [col for col in cols_to_use if any(status in col.upper() for status in selected_status)]
-        
-        return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
+        else:
+            # Fallback for unknown format
+            st.warning("Format lembar AKTA tidak dikenali. Menampilkan semua kolom numerik.")
+            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            return filtered_df[['KECAMATAN', 'DESA'] + list(numeric_cols)]
 
     def add_ktp_filters(self, df):
         """Filter khusus untuk lembar KTP"""
@@ -260,7 +304,7 @@ class MadiunDataVisualizer:
         for col in df.columns:
             if col not in ['KECAMATAN', 'DESA']:
                 # Deteksi pola kolom umur (misalnya "0-4", "5-9", "10-14", dll.)
-                if '-' in col or 'TAHUN' in col.upper() or 'THN' in col.upper():
+                if isinstance(col, str) and ('-' in col or 'TAHUN' in col.upper() or 'THN' in col.upper()):
                     umur_cols.append(col)
         
         # Jika terlalu banyak kelompok umur, buat kategori
@@ -398,7 +442,7 @@ class MadiunDataVisualizer:
         selected_pekerjaan = st.sidebar.multiselect(
             "Pilih Jenis Pekerjaan",
             options=pekerjaan_options,
-            default=pekerjaan_options[:5] if len(pekerjaan_options) > 5 else pekerjaan_options
+            default=pekerjaan_options[:6] if len(pekerjaan_options) > 6 else pekerjaan_options
         )
         
         # Terapkan filter
@@ -407,7 +451,7 @@ class MadiunDataVisualizer:
         return filtered_df[['KECAMATAN', 'DESA'] + selected_pekerjaan]
 
     def add_perkawinan_filters(self, df):
-        """Filter khusus untuk lembar Status Perkawinan"""
+        """Filter khusus untuk lembar Status Perkawinan atau KK KAWIN"""
         st.sidebar.subheader("Filter Data Status Perkawinan")
         
         # Filter Kecamatan
@@ -418,44 +462,106 @@ class MadiunDataVisualizer:
             default=kecamatan_list
         )
         
-        # Filter Status Perkawinan
-        status_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
-        selected_status = st.sidebar.multiselect(
-            "Pilih Status Perkawinan",
-            options=status_list,
-            default=status_list
-        )
+        # Detect if this is a PERKAWINAN or KK KAWIN sheet by column names
+        # Common status categories across both formats
+        status_categories = ['BELUM KAWIN', 'KAWIN', 'CERAI HIDUP', 'CERAI MATI']
         
-        # Terapkan filter
-        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # First identify if columns contain gender breakdown (LK, PR, JML)
+        has_gender_breakdown = any(str(col).startswith('LK') or str(col).startswith('PR') or str(col).startswith('JML') 
+                                for col in df.columns)
         
-        return filtered_df[['KECAMATAN', 'DESA'] + selected_status]
+        if has_gender_breakdown:
+            # This is the KK KAWIN or PERKAWINAN format with gender breakdown
+            # Filter Status Perkawinan
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Perkawinan",
+                options=status_categories,
+                default=status_categories
+            )
+            
+            # Filter Jenis Kelamin
+            gender_options = ['LK', 'PR', 'JML']
+            selected_gender = st.sidebar.multiselect(
+                "Pilih Jenis Kelamin",
+                options=gender_options,
+                default=gender_options
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            # Build column selections based on both status and gender
+            status_cols = []
+            for gender in selected_gender:
+                for status in selected_status:
+                    col_name = f"{gender} ({status})"
+                    if col_name in df.columns:
+                        status_cols.append(col_name)
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
+        else:
+            # Old PERKAWINAN format without gender breakdown
+            # Filter Status Perkawinan (use all numeric columns as options)
+            numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+            status_list = [col for col in numeric_cols if col not in ['KECAMATAN', 'DESA']]
+            selected_status = st.sidebar.multiselect(
+                "Pilih Status Perkawinan",
+                options=status_list,
+                default=status_list
+            )
+            
+            # Terapkan filter
+            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            
+            return filtered_df[['KECAMATAN', 'DESA'] + selected_status]
 
     def visualize_filtered_data(self, df, sheet_name):
         """Visualisasi data yang sudah difilter"""
-        if 'AKTA' in sheet_name.upper():
-            filtered_df = self.add_akta_filters(df)
+        # Make a copy of the dataframe to avoid modifying the original
+        df_copy = df.copy()
+        
+        # Convert any non-string column names to string to avoid errors
+        df_copy.columns = [str(col) for col in df_copy.columns]
+        
+        # First, preprocess the dataframe to handle potential issues
+        # Ensure KECAMATAN and DESA columns exist (for grouping)
+        if 'KECAMATAN' not in df_copy.columns:
+            st.warning("Kolom KECAMATAN tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
+            df_copy['KECAMATAN'] = 'Unknown'
+        
+        if 'DESA' not in df_copy.columns:
+            st.warning("Kolom DESA tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
+            df_copy['DESA'] = 'Unknown'
+        
+        # Apply appropriate filter based on sheet name
+        # Check multiple variants of names to handle different Excel formats
+        if any(akta_keyword in sheet_name.upper() for akta_keyword in ['AKTA', 'AKTA 0', 'AKTA 0 SD 17']):
+            filtered_df = self.add_akta_filters(df_copy)
         elif 'KTP' in sheet_name.upper():
-            filtered_df = self.add_ktp_filters(df)
+            filtered_df = self.add_ktp_filters(df_copy)
         elif 'AGAMA' in sheet_name.upper():
-            filtered_df = self.add_agama_filters(df)
+            filtered_df = self.add_agama_filters(df_copy)
         elif 'KIA' in sheet_name.upper():
-            filtered_df = self.add_kia_filters(df)
-        elif 'KARTU KELUARGA' in sheet_name.upper() or 'KK' in sheet_name.upper():
-            filtered_df = self.add_kartu_keluarga_filters(df)
+            filtered_df = self.add_kia_filters(df_copy)
+        elif any(kk_keyword in sheet_name.upper() for kk_keyword in ['KARTU KELUARGA', 'KK']):
+            # Make sure it's actually KK data and not KK KAWIN data
+            if 'KAWIN' not in sheet_name.upper():
+                filtered_df = self.add_kartu_keluarga_filters(df_copy)
+            else:  # This is for KK KAWIN sheets
+                filtered_df = self.add_perkawinan_filters(df_copy)
         elif 'PENDUDUK' in sheet_name.upper():
-            filtered_df = self.add_penduduk_filters(df)
+            filtered_df = self.add_penduduk_filters(df_copy)
         elif 'PENDIDIKAN' in sheet_name.upper():
-            filtered_df = self.add_pendidikan_filters(df)
+            filtered_df = self.add_pendidikan_filters(df_copy)
         elif 'PEKERJAAN' in sheet_name.upper():
-            filtered_df = self.add_pekerjaan_filters(df)
-        elif 'PERKAWINAN' in sheet_name.upper() or 'KAWIN' in sheet_name.upper():
-            filtered_df = self.add_perkawinan_filters(df)
-        elif 'KEL UMUR' in sheet_name.upper() or 'KELOMPOK UMUR' in sheet_name.upper() or 'UMUR' in sheet_name.upper():
-            filtered_df = self.add_kelompok_umur_filters(df)
+            filtered_df = self.add_pekerjaan_filters(df_copy)
+        elif any(kawin_keyword in sheet_name.upper() for kawin_keyword in ['PERKAWINAN', 'KAWIN']):
+            filtered_df = self.add_perkawinan_filters(df_copy)
+        elif any(umur_keyword in sheet_name.upper() for umur_keyword in ['KEL UMUR', 'KELOMPOK UMUR', 'UMUR']):
+            filtered_df = self.add_kelompok_umur_filters(df_copy)
         else:
             st.warning(f"Tidak ada filter khusus untuk lembar {sheet_name}")
-            filtered_df = df
+            filtered_df = df_copy
         
         # Tampilkan data yang sudah difilter
         st.subheader(f"Data Terfilter - {sheet_name}")
@@ -481,6 +587,9 @@ class MadiunDataVisualizer:
             fig_bar.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig_bar, use_container_width=True)
             
+            # Define fig_pie with None as default
+            fig_pie = None
+            
             # Visualisasi tambahan untuk data tertentu
             if len(numeric_cols) <= 10:  # Jika kolom tidak terlalu banyak
                 # Pie chart untuk total
@@ -489,8 +598,10 @@ class MadiunDataVisualizer:
                     labels=total_values.index,
                     values=total_values.values,
                     textinfo='percent+value',
-                    hole=0.3,  # Donut chart untuk tampilan lebih modern
+                    hole=0.3,  
                 )])
+                
+                # Update layout and display the pie chart within the if block
                 fig_pie.update_layout(
                     title=f'Distribusi Total - {sheet_name}',
                     height=500
@@ -513,8 +624,76 @@ class MadiunDataVisualizer:
                 )
                 st.plotly_chart(fig_heatmap, use_container_width=True)
                 
-                # Tambahkan visualisasi persentase untuk tiap kecamatan
-                if 'KARTU KELUARGA' in sheet_name.upper() or 'KK' in sheet_name.upper():
+                # Tambahkan visualisasi khusus untuk lembar tertentu
+                if 'AKTA' in sheet_name.upper():
+                    # For AKTA sheets, show ownership percentage
+                    memiliki_cols = [col for col in pivot_df.columns if 'MEMILIKI' in str(col) and 'BELUM' not in str(col)]
+                    belum_cols = [col for col in pivot_df.columns if 'BELUM MEMILIKI' in str(col)]
+                    
+                    if memiliki_cols and belum_cols:
+                        try:
+                            ratio_df = pd.DataFrame()
+                            ratio_df['% Memiliki'] = pivot_df[memiliki_cols].sum(axis=1) / (pivot_df[memiliki_cols].sum(axis=1) + pivot_df[belum_cols].sum(axis=1)) * 100
+                            ratio_df['% Belum Memiliki'] = 100 - ratio_df['% Memiliki']
+                            
+                            fig_ratio = px.bar(
+                                ratio_df.reset_index(),
+                                x='KECAMATAN',
+                                y=['% Memiliki', '% Belum Memiliki'],
+                                title="Persentase Kepemilikan Akta per Kecamatan",
+                                barmode='stack',
+                                height=500
+                            )
+                            fig_ratio.update_layout(xaxis_tickangle=-45)
+                            st.plotly_chart(fig_ratio, use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"Tidak dapat membuat visualisasi persentase: {str(e)}")
+                            
+                elif 'KK KAWIN' in sheet_name.upper() or 'PERKAWINAN' in sheet_name.upper():
+                    # Special visualization for KK KAWIN or PERKAWINAN
+                    try:
+                        if any('KAWIN' in str(col) for col in pivot_df.columns):
+                            # Group columns by marital status
+                            status_groups = {
+                                'BELUM KAWIN': [col for col in pivot_df.columns if 'BELUM KAWIN' in str(col)],
+                                'KAWIN': [col for col in pivot_df.columns if ' KAWIN' in str(col) and 'BELUM' not in str(col)],
+                                'CERAI HIDUP': [col for col in pivot_df.columns if 'CERAI HIDUP' in str(col)],
+                                'CERAI MATI': [col for col in pivot_df.columns if 'CERAI MATI' in str(col)]
+                            }
+                            
+                            # Calculate totals for each status group
+                            status_totals = {}
+                            for status, cols in status_groups.items():
+                                if cols:
+                                    status_totals[status] = pivot_df[cols].sum(axis=1)
+                            
+                            if status_totals:
+                                ratio_df = pd.DataFrame(status_totals)
+                                row_totals = ratio_df.sum(axis=1)
+                                
+                                # Calculate percentages
+                                for col in ratio_df.columns:
+                                    ratio_df[f'% {col}'] = (ratio_df[col] / row_totals * 100).round(2)
+                                
+                                # Keep only percentage columns for visualization
+                                pct_cols = [col for col in ratio_df.columns if col.startswith('%')]
+                                
+                                if pct_cols:
+                                    fig_pct = px.bar(
+                                        ratio_df.reset_index(),
+                                        x='KECAMATAN',
+                                        y=pct_cols,
+                                        title="Distribusi Status Perkawinan per Kecamatan (%)",
+                                        barmode='stack',
+                                        height=500
+                                    )
+                                    fig_pct.update_layout(xaxis_tickangle=-45)
+                                    st.plotly_chart(fig_pct, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"Tidak dapat membuat visualisasi status perkawinan: {str(e)}")
+                    
+                # Visualisasi untuk kartu keluarga jika relevan
+                elif ('KARTU KELUARGA' in sheet_name.upper() or 'KK' in sheet_name.upper()) and 'KAWIN' not in sheet_name.upper():
                     # Jika data kartu keluarga, tambahkan visualisasi persentase
                     if ('LK (JML KEP. KELUARGA)' in pivot_df.columns and 
                         'PR (JML KEP. KELUARGA)' in pivot_df.columns and
@@ -538,72 +717,7 @@ class MadiunDataVisualizer:
                         st.plotly_chart(fig_ratio, use_container_width=True)
         else:
             st.warning("Tidak ada kolom numerik untuk divisualisasikan")
-    
-    def compare_sheets(self, sheet_names):
-        """Membandingkan data dari beberapa lembar"""
-        st.subheader("Perbandingan Antar Lembar Data")
-        
-        selected_sheets = st.multiselect(
-            "Pilih Lembar yang Akan Dibandingkan",
-            options=sheet_names,
-            default=sheet_names[:2] if len(sheet_names) > 1 else sheet_names
-        )
-        
-        if len(selected_sheets) < 2:
-            st.warning("Pilih minimal 2 lembar untuk perbandingan")
-            return
-        
-        # Pilih kolom untuk perbandingan
-        comparison_data = {}
-        selected_kecamatan = []
-        
-        for sheet in selected_sheets:
-            df = pd.read_excel(self.file_path, sheet_name=sheet)
-            
-            if 'KECAMATAN' in df.columns:
-                if not selected_kecamatan:
-                    selected_kecamatan = st.multiselect(
-                        "Pilih Kecamatan untuk Perbandingan",
-                        options=df['KECAMATAN'].unique(),
-                        default=df['KECAMATAN'].unique()[0]
-                    )
-                
-                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-                if numeric_cols.any():
-                    selected_col = st.selectbox(
-                        f"Pilih Kolom dari {sheet}",
-                        options=numeric_cols,
-                        key=f"compare_{sheet}"
-                    )
-                    
-                    if selected_kecamatan and selected_col:
-                        filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
-                        comparison_data[sheet] = filtered_df.groupby('KECAMATAN')[selected_col].sum().reset_index()
-        
-        if comparison_data:
-            # Gabungkan data perbandingan
-            comparison_result = []
-            
-            for sheet, data in comparison_data.items():
-                data_dict = {'Lembar': sheet}
-                for _, row in data.iterrows():
-                    data_dict[row['KECAMATAN']] = row[1]  # Kolom kedua (setelah KECAMATAN)
-                comparison_result.append(data_dict)
-            
-            comparison_df = pd.DataFrame(comparison_result)
-            
-            # Tampilkan hasil perbandingan
-            st.dataframe(comparison_df, use_container_width=True)
-            
-            # Visualisasi perbandingan
-            fig_comparison = px.bar(
-                comparison_df,
-                x='Lembar',
-                y=selected_kecamatan,
-                title="Perbandingan Antar Lembar",
-                barmode='group'
-            )
-            st.plotly_chart(fig_comparison, use_container_width=True)
+
 
 def main():
     st.set_page_config(
@@ -614,8 +728,8 @@ def main():
     
     st.title("📊 Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
     
-    # Membuat tab untuk navigasi
-    tab1, tab2, tab3 = st.tabs(["Visualisasi Data", "Perbandingan Antar Data", "Tentang Aplikasi"])
+    # Membuat tab untuk navigasi (tanpa tab perbandingan)
+    tab1, tab2 = st.tabs(["Visualisasi Data", "Tentang Aplikasi"])
     
     # File selection and handling
     st.sidebar.header("Pilihan File Data")
@@ -624,15 +738,30 @@ def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     available_files = []
     
-    # Check for hardcoded files
-    file1_path = os.path.join(current_dir, "STAT_SMT_I_2024.xlsx")
-    file2_path = os.path.join(current_dir, "STAT_SMT_2_2024.xlsx")
+    # Check for hardcoded files with both naming patterns
+    file1_paths = [
+        os.path.join(current_dir, "STAT_SMT_I_2024.xlsx"),
+        os.path.join(current_dir, "STAT_SMT_1_2024.xlsx")
+    ]
     
-    if os.path.exists(file1_path):
-        available_files.append("STAT_SMT_I_2024.xlsx")
+    file2_paths = [
+        os.path.join(current_dir, "STAT_SMT_2_2024.xlsx"),
+        os.path.join(current_dir, "STAT_SMT_II_2024.xlsx")
+    ]
     
-    if os.path.exists(file2_path):
-        available_files.append("STAT_SMT_2_2024.xlsx")
+    # Check first semester file
+    for file_path in file1_paths:
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            available_files.append(filename)
+            break
+    
+    # Check second semester file
+    for file_path in file2_paths:
+        if os.path.exists(file_path):
+            filename = os.path.basename(file_path)
+            available_files.append(filename)
+            break
     
     # Option to upload a custom file
     uploaded_file = st.sidebar.file_uploader("Unggah File Excel", type=['xlsx', 'xls'])
@@ -691,10 +820,6 @@ def main():
             visualizer.visualize_filtered_data(df, selected_sheet)
         
         with tab2:
-            # Perbandingan antar lembar
-            visualizer.compare_sheets(sheet_names)
-        
-        with tab3:
             # Informasi tentang aplikasi
             st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
             
@@ -718,7 +843,6 @@ def main():
             2. Pilih lembar data yang ingin divisualisasikan
             3. Sesuaikan filter yang tersedia
             4. Lihat hasil visualisasi dalam bentuk tabel dan grafik
-            5. Untuk membandingkan data antar lembar, gunakan tab "Perbandingan Antar Data"
             
             ### Sumber Data
             Data yang digunakan dalam aplikasi ini bersumber dari Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun.
@@ -745,8 +869,8 @@ def main():
                 # Tampilkan informasi perbandingan jika ada dua file yang tersedia
                 if len(available_files) >= 2:
                     st.subheader("Informasi File Data")
-                    st.info(f"Tersedia {len(available_files)} file data untuk dibandingkan: {', '.join(available_files)}")
-                    st.write("Anda dapat beralih antara file di sidebar untuk membandingkan data dari periode yang berbeda.")
+                    st.info(f"Tersedia {len(available_files)} file data: {', '.join(available_files)}")
+                    st.write("Anda dapat beralih antara file di sidebar untuk melihat data dari periode yang berbeda.")
     
     except Exception as e:
         st.error(f"Terjadi kesalahan: {str(e)}")
