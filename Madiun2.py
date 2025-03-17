@@ -442,7 +442,7 @@ class MadiunDataVisualizer:
         selected_pekerjaan = st.sidebar.multiselect(
             "Pilih Jenis Pekerjaan",
             options=pekerjaan_options,
-            default=pekerjaan_options[:5] if len(pekerjaan_options) > 5 else pekerjaan_options
+            default=pekerjaan_options[:6] if len(pekerjaan_options) > 6 else pekerjaan_options
         )
         
         # Terapkan filter
