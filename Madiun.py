@@ -916,7 +916,7 @@ def main():
     # Add user profile section in sidebar
     user_profile_section()
     
-    st.title("📊 Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
+    st.title("Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
     
     # Membuat tab untuk navigasi (tanpa tab perbandingan)
     tab1, tab2 = st.tabs(["Visualisasi Data", "Tentang Aplikasi"])
