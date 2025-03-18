@@ -1014,11 +1014,11 @@ def main():
             st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
             
             # Add logo in the about section too
-            logo_path = get_logo_path()
-            if logo_path:
-                logo_col1, logo_col2, logo_col3 = st.columns([1, 2, 1])
-                with logo_col2:
-                    st.image(Image.open(logo_path), width=200)
+           # logo_path = get_logo_path()
+           # if logo_path:
+            #    logo_col1, logo_col2, logo_col3 = st.columns([1, 2, 1])
+             #   with logo_col2:
+              #      st.image(Image.open(logo_path), width=100)
             
             st.markdown("""
             ### Deskripsi
