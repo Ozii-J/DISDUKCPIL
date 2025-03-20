@@ -1,14 +1,14 @@
 {
     "users": {
         "admin": {
-            "password": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
+            "password": "b5045cc120e1fcd12b46ed02b6872fe77d145983ab5ad1e752d73143203d4ce4",
             "role": "admin",
             "name": "Administrator"
         },
-        "dispendukcapil": {
-            "password": "356b3cab42d8834d51ec2a99c99530e00a477dc2e32d351ba6aa6bf7b41fa308",
-            "role": "staff",
-            "name": "Staff Dispendukcapil"
+        "Ozii": {
+            "password": "6557739a67283a8de383fc5c0997fbec7c5721a46f28f3235fc9607598d9016b",
+            "role": "Develop",
+            "name": "Development"
         }
     }
 }

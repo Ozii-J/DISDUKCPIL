@@ -114,28 +114,30 @@ def create_visualizations(filtered_df, sheet_name):
 def create_special_visualizations(pivot_df, sheet_name):
     """Create special visualizations based on sheet type"""
     if 'AKTA' in sheet_name.upper():
-        # For AKTA sheets, show ownership percentage
-        memiliki_cols = [col for col in pivot_df.columns if 'MEMILIKI' in str(col) and 'BELUM' not in str(col)]
-        belum_cols = [col for col in pivot_df.columns if 'BELUM MEMILIKI' in str(col)]
-        
-        if memiliki_cols and belum_cols:
-            try:
-                ratio_df = pd.DataFrame()
-                ratio_df['% Memiliki'] = pivot_df[memiliki_cols].sum(axis=1) / (pivot_df[memiliki_cols].sum(axis=1) + pivot_df[belum_cols].sum(axis=1)) * 100
-                ratio_df['% Belum Memiliki'] = 100 - ratio_df['% Memiliki']
-                
-                fig_ratio = px.bar(
-                    ratio_df.reset_index(),
-                    x='KECAMATAN',
-                    y=['% Memiliki', '% Belum Memiliki'],
-                    title="Persentase Kepemilikan Akta per Kecamatan",
-                    barmode='stack',
-                    height=500
-                )
-                fig_ratio.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig_ratio, use_container_width=True)
-            except Exception as e:
-                st.warning(f"Tidak dapat membuat visualisasi persentase: {str(e)}")
+        # Skip the percentage bar chart specifically for AKTA 0 SD 17 sheets
+        if not any(akta_keyword in sheet_name.upper() for akta_keyword in ['AKTA 0 SD 17', 'AKTA 0-17']):
+            # For AKTA sheets, show ownership percentage but skip for AKTA 0-17
+            memiliki_cols = [col for col in pivot_df.columns if 'MEMILIKI' in str(col) and 'BELUM' not in str(col)]
+            belum_cols = [col for col in pivot_df.columns if 'BELUM MEMILIKI' in str(col)]
+            
+            if memiliki_cols and belum_cols:
+                try:
+                    ratio_df = pd.DataFrame()
+                    ratio_df['% Memiliki'] = pivot_df[memiliki_cols].sum(axis=1) / (pivot_df[memiliki_cols].sum(axis=1) + pivot_df[belum_cols].sum(axis=1)) * 100
+                    ratio_df['% Belum Memiliki'] = 100 - ratio_df['% Memiliki']
+                    
+                    fig_ratio = px.bar(
+                        ratio_df.reset_index(),
+                        x='KECAMATAN',
+                        y=['% Memiliki', '% Belum Memiliki'],
+                        title="Persentase Kepemilikan Akta per Kecamatan",
+                        barmode='stack',
+                        height=500
+                    )
+                    fig_ratio.update_layout(xaxis_tickangle=-45)
+                    st.plotly_chart(fig_ratio, use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Tidak dapat membuat visualisasi persentase: {str(e)}")
                 
     elif 'KK KAWIN' in sheet_name.upper() or 'PERKAWINAN' in sheet_name.upper():
         # Special visualization for KK KAWIN or PERKAWINAN
@@ -281,7 +283,7 @@ def login_page():
     # Close the login container
     st.markdown('</div>', unsafe_allow_html=True)
     
-    st.markdown("<div style='text-align: center; margin-top: 50px;'>&copy; 2024 Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; margin-top: 50px;'>&copy; 2025 Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun</div>", unsafe_allow_html=True)
 
 def add_logo():
     """Add the Madiun logo to the Streamlit sidebar"""
@@ -289,7 +291,7 @@ def add_logo():
     
     if logo_path:
         try:
-            st.sidebar.image(Image.open(logo_path), width=150)
+            st.sidebar.image(Image.open(logo_path), width=140)
         except Exception as e:
             st.sidebar.warning(f"Error loading logo: {str(e)}")
             st.sidebar.warning("Logo tidak dapat ditampilkan. Pastikan file logo valid.")
@@ -709,7 +711,190 @@ def render_perkawinan_filters(filter_data):
         
         return filter_data['get_filtered_df'](selected_kecamatan, selected_status)
 
-# ============= MAIN FUNCTION =============
+def compare_files_page():
+    """Halaman perbandingan data antar file"""
+    st.header("Perbandingan Data Antar File")
+    
+    # Dapatkan file yang tersedia
+    available_files = get_available_files()
+    
+    if len(available_files) < 2:
+        st.warning("Tidak cukup file untuk dibandingkan. Harap unggah minimal 2 file Excel.")
+        return
+    
+    # Pilih file untuk perbandingan
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        file1 = st.selectbox("Pilih File Pertama", available_files)
+    
+    with col2:
+        file2 = st.selectbox("Pilih File Kedua", 
+                            [f for f in available_files if f != file1], 
+                            index=0 if len(available_files) > 1 else None)
+    
+    # Dapatkan path lengkap file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    file1_path = os.path.join(current_dir, file1)
+    file2_path = os.path.join(current_dir, file2)
+    
+    # Ambil nama lembar dari kedua file
+    xls1 = pd.ExcelFile(file1_path)
+    xls2 = pd.ExcelFile(file2_path)
+    
+    # Pilih lembar untuk perbandingan
+    sheet_name = st.selectbox(
+        "Pilih Lembar untuk Dibandingkan", 
+        sorted(set(xls1.sheet_names) & set(xls2.sheet_names))
+    )
+    
+    if sheet_name:
+        # Baca data dari kedua file
+        df1 = pd.read_excel(file1_path, sheet_name=sheet_name)
+        df2 = pd.read_excel(file2_path, sheet_name=sheet_name)
+        
+        # Konversi nama kolom ke string untuk konsistensi
+        df1.columns = [str(col) for col in df1.columns]
+        df2.columns = [str(col) for col in df2.columns]
+        
+        # Pilih kolom numerik untuk perbandingan
+        numeric_cols1 = df1.select_dtypes(include=['float64', 'int64']).columns
+        numeric_cols2 = df2.select_dtypes(include=['float64', 'int64']).columns
+        
+        # Temukan kolom yang sama di kedua file
+        common_numeric_cols = sorted(set(numeric_cols1) & set(numeric_cols2))
+        
+        if not common_numeric_cols:
+            st.warning("Tidak ada kolom numerik yang sama untuk dibandingkan.")
+            return
+        
+        # Pilih kolom untuk perbandingan
+        selected_cols = st.multiselect(
+            "Pilih Kolom untuk Dibandingkan", 
+            options=common_numeric_cols,
+            default=common_numeric_cols[:min(4, len(common_numeric_cols))]
+        )
+        
+        if selected_cols:
+            # Gabungkan data dengan kolom yang dipilih
+            # Pastikan 'KECAMATAN' adalah kolom utama
+            if 'KECAMATAN' in df1.columns and 'KECAMATAN' in df2.columns:
+                # Merge data berdasarkan kecamatan
+                merged_df = pd.merge(
+                    df1[['KECAMATAN'] + list(selected_cols)].groupby('KECAMATAN').sum(), 
+                    df2[['KECAMATAN'] + list(selected_cols)].groupby('KECAMATAN').sum(), 
+                    left_index=True, 
+                    right_index=True, 
+                    suffixes=(f' ({file1})', f' ({file2})')
+                )
+            else:
+                # Jika tidak ada kolom kecamatan, gunakan agregasi global
+                merged_df = pd.DataFrame({
+                    f'{col} ({file1})': [df1[col].sum()] for col in selected_cols
+                })
+                merged_df.update(pd.DataFrame({
+                    f'{col} ({file2})': [df2[col].sum()] for col in selected_cols
+                }))
+            
+            # Tampilkan tabel perbandingan
+            st.subheader("Tabel Perbandingan")
+            st.dataframe(merged_df, use_container_width=True)
+            
+            # Deteksi apakah ini AKTA 0-17 dan memiliki kolom kepemilikan
+            is_akta_0_17 = any(akta_keyword in sheet_name.upper() for akta_keyword in ['AKTA 0 SD 17', 'AKTA 0-17'])
+            
+            # Cek jika ada kolom MEMILIKI dan BELUM MEMILIKI untuk AKTA 0-17
+            has_ownership_cols = is_akta_0_17 and (
+                any('MEMILIKI' in col for col in selected_cols) or 
+                any('BELUM MEMILIKI' in col for col in selected_cols)
+            )
+            
+            # Visualisasi perbandingan
+            st.subheader("Visualisasi Perbandingan")
+            
+            # Bar chart perbandingan (selalu tampilkan)
+            fig_bar = go.Figure()
+            
+            # Tambahkan bar untuk setiap kolom yang dipilih
+            for col in selected_cols:
+                col1_name = f'{col} ({file1})'
+                col2_name = f'{col} ({file2})'
+                
+                fig_bar.add_trace(go.Bar(
+                    x=merged_df.index,
+                    y=merged_df[col1_name],
+                    name=f'{col} - {file1}',
+                    offsetgroup=0
+                ))
+                
+                fig_bar.add_trace(go.Bar(
+                    x=merged_df.index,
+                    y=merged_df[col2_name],
+                    name=f'{col} - {file2}',
+                    offsetgroup=1
+                ))
+            
+            # Perbarui layout untuk pengelompokan bar
+            fig_bar.update_layout(
+                title=f'Perbandingan Data {sheet_name}',
+                xaxis_title='Kecamatan',
+                yaxis_title='Jumlah',
+                barmode='group',
+                height=600
+            )
+            
+            # Tampilkan grafik
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+            # Hitung dan tampilkan perubahan persentase
+            st.subheader("Analisis Perubahan")
+            
+            # Tabel persentase perubahan
+            change_df = pd.DataFrame(index=merged_df.index)
+            
+            for col in selected_cols:
+                col1_name = f'{col} ({file1})'
+                col2_name = f'{col} ({file2})'
+                
+                # Hitung persentase perubahan (dengan penanganan division by zero)
+                change_col = f'% Perubahan {col}'
+                # Hindari division by zero dengan memeriksa nilai nol
+                change_df[change_col] = merged_df.apply(
+                    lambda row: ((row[col2_name] - row[col1_name]) / row[col1_name] * 100).round(2) 
+                    if row[col1_name] != 0 else float('nan'), 
+                    axis=1
+                )
+            
+            # Tampilkan tabel perubahan
+            st.dataframe(change_df, use_container_width=True)
+            
+            # Visualisasi perubahan persentase
+            # Skip stacked bar chart untuk AKTA 0-17 yang memiliki kolom kepemilikan
+            if has_ownership_cols:
+                # Untuk AKTA 0-17 yang memiliki kolom kepemilikan, tampilkan pesan info
+                st.info("Visualisasi persentase stacked bar chart untuk data kepemilikan AKTA 0-17 tidak ditampilkan secara sengaja sesuai permintaan.")
+            else:
+                # Untuk sheet lainnya, tampilkan visualisasi perubahan persentase normal
+                fig_change = go.Figure()
+                
+                for col in selected_cols:
+                    change_col = f'% Perubahan {col}'
+                    
+                    fig_change.add_trace(go.Bar(
+                        x=change_df.index,
+                        y=change_df[change_col],
+                        name=change_col
+                    ))
+                
+                fig_change.update_layout(
+                    title='Persentase Perubahan Antar File',
+                    xaxis_title='Kecamatan',
+                    yaxis_title='Persentase Perubahan (%)',
+                    height=500
+                )
+                
+                st.plotly_chart(fig_change, use_container_width=True)
+                # ============= MAIN FUNCTION =============
 
 def main():
     # Get the logo path for favicon
@@ -765,7 +950,7 @@ def main():
     st.title("DINAS KEPENDUDUKAN DAN PENCATATAN SIPIL KAB.MADIUN")
     
     # Membuat tab untuk navigasi (tanpa tab perbandingan)
-    tab1, tab2 = st.tabs(["Visualisasi Data", "Tentang Aplikasi"])
+    tab1, tab2, tab3 = st.tabs(["Visualisasi Data", "Perbandingan Antar File", "Tentang Aplikasi"])
     
     # File selection and handling
     st.sidebar.header("Pilihan File Data")
@@ -808,7 +993,7 @@ def main():
     try:
         visualizer = MadiunDataVisualizer(file_path)
         sheet_names = visualizer.xls.sheet_names
-        
+      
         with tab1:
             st.sidebar.header("Pengaturan Visualisasi")
             selected_sheet = st.sidebar.selectbox(
@@ -879,16 +1064,12 @@ def main():
             create_visualizations(filtered_df, selected_sheet)
         
         with tab2:
-             # Show logo in the about section
-#            logo_path = get_logo_path()
- #           if logo_path:
-  #              logo_col1, logo_col2, logo_col3 = st.columns([2.2, 2, 1])
-   #             with logo_col2:
-    #                st.image(Image.open(logo_path), width=100)
-
+            # Tambahkan halaman perbandingan
+            compare_files_page()
+            
+        with tab3:
             # Informasi tentang aplikasi
             st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
-            
             
             st.markdown("""
             ### Deskripsi

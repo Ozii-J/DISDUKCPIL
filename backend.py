@@ -23,11 +23,12 @@ def load_config():
                     "role": "admin",
                     "name": "Administrator"
                 },
-                "dispendukcapil": {
-                    "password": hashlib.sha256("madiun2024".encode()).hexdigest(),
-                    "role": "staff",
-                    "name": "Staff Dispendukcapil"
+                "Ozii": {
+                    "password": hashlib.sha256("2024".encode()).hexdigest(),
+                    "role": "Develop",
+                    "name": "Development"
                 }
+                
             }
         }
         
