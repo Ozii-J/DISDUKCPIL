@@ -277,7 +277,7 @@ def login_page():
         if help_button:
             st.info("""
             ### Bantuan Login
-            - Username dan password default: admin / admin123
+            - Username dan password default: admin / admin13
             - Jika Anda mengalami masalah login, silakan hubungi administrator.
             - Atau gunakan akun staff: dispendukcapil / madiun2024
             """)
@@ -306,11 +306,98 @@ def user_profile_section():
     st.sidebar.write(f"Nama: {st.session_state.user_data['name']}")
     st.sidebar.write(f"Role: {st.session_state.user_data['role'].capitalize()}")
     
-    if st.sidebar.button("Keluar"):
+    if st.sidebar.button("Keluar") :
         st.session_state.logged_in = False
         st.session_state.username = None
         st.session_state.user_data = None
         st.experimental_rerun()
+
+# ============= MENU NAVIGASI YANG DITINGKATKAN =============
+
+def create_beautiful_menu():
+    """Buat menu navigasi yang menarik dengan emoji di dalam tombol"""
+    
+    # Tambahkan CSS untuk styling tombol
+    st.markdown("""
+    <style>
+    /* Styling untuk tombol menu */
+    div.stButton > button {
+        background-color: white;
+        color: #333;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 20px 10px;
+        transition: all 0.3s;
+        font-size: 8px;
+        height: 60px;
+        display: block;
+        width: 100%;
+        margin: 0;
+        line-height: 1.2;
+        white-space: normal;
+    }
+    
+    div.stButton > button:first-line {
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: block;
+    }
+    
+    div.stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        background-color: #f0f7f4;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Inisialisasi tab aktif jika belum ada
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "viz_data"
+    
+    # Buat layout horizontal untuk item menu
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Buat tombol menu dengan emoji
+    with col1:
+        if st.button("📊\nVisualisasi Data", use_container_width=True):
+            st.session_state.active_tab = "viz_data"
+            st.experimental_rerun()
+    
+    with col2:
+        if st.button("🔄\nPerbandingan File", use_container_width=True):
+            st.session_state.active_tab = "compare"
+            st.experimental_rerun()
+    
+    with col3:
+        if st.button("🗺️\nVisualisasi Peta", use_container_width=True):
+            st.session_state.active_tab = "map_viz"
+            st.experimental_rerun()
+    
+    with col4:
+        if st.button("ℹ️\nTentang Aplikasi", use_container_width=True):
+            st.session_state.active_tab = "about"
+            st.experimental_rerun()
+    
+    # Styling khusus untuk tab aktif
+    tab_indices = {
+        "viz_data": 1,
+        "compare": 2,
+        "map_viz": 3,
+        "about": 4
+    }
+    
+    active_index = tab_indices[st.session_state.active_tab]
+    st.markdown(f"""
+    <style>
+    div[data-testid="stHorizontalBlock"] > div:nth-child({active_index}) button {{
+        background-color: #0b5f34 !important;
+        color: white !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    
+    return st.session_state.active_tab
 
 # ============= TEMA WARNA KUSTOM =============
 
@@ -556,7 +643,6 @@ def render_kartu_keluarga_filters(filter_data):
         options=filter_data['gender_options'],
         default=filter_data['gender_options']
     )
-    
     return filter_data['get_filtered_df'](selected_kecamatan, selected_data, selected_gender)
 
 def render_penduduk_filters(filter_data):
@@ -896,7 +982,8 @@ def compare_files_page():
                 )
                 
                 st.plotly_chart(fig_change, use_container_width=True)
-                # ============= MAIN FUNCTION =============
+
+# ============= MAIN FUNCTION =============
 
 def main():
     # Get the logo path for favicon
@@ -951,8 +1038,8 @@ def main():
     
     st.title("DINAS KEPENDUDUKAN DAN PENCATATAN SIPIL KAB.MADIUN")
     
-    # Membuat tab untuk navigasi dengan tab peta baru
-    tab1, tab2, tab3, tab4 = st.tabs(["Visualisasi Data", "Perbandingan Antar File", "Visualisasi Peta", "Tentang Aplikasi"])
+    # PERUBAHAN: Menggunakan menu yang telah ditingkatkan
+    active_tab = create_beautiful_menu()
     
     # File selection and handling
     st.sidebar.header("Pilihan File Data")
@@ -996,7 +1083,10 @@ def main():
         visualizer = MadiunDataVisualizer(file_path)
         sheet_names = visualizer.xls.sheet_names
       
-        with tab1:
+        # PERUBAHAN: Kode untuk setiap tab telah dikonversi ke bagian if-elif
+        
+        if active_tab == "viz_data":
+            # Konten untuk visualisasi data (tab1)
             st.sidebar.header("Pengaturan Visualisasi")
             selected_sheet = st.sidebar.selectbox(
                 "Pilih Lembar yang Akan Divisualisasikan",
@@ -1065,16 +1155,25 @@ def main():
             # Create visualizations
             create_visualizations(filtered_df, selected_sheet)
         
-        with tab2:
-            # Tambahkan halaman perbandingan
+        elif active_tab == "compare":
+            # Konten untuk perbandingan antar file (tab2)
             compare_files_page()
 
-        with tab3:
-            # Tambahkan visualisasi peta
+        elif active_tab == "map_viz":
+            # Konten untuk visualisasi peta (tab3)
+            # Untuk keperluan ini, kita perlu data yang terfilter
+            # Karena kita tidak lagi di dalam tab, kita perlu membuat variable filtered_df
+            # Sebagai contoh, kita akan menggunakan lembar pertama
+            selected_sheet = sheet_names[0]
+            df = pd.read_excel(file_path, sheet_name=selected_sheet)
+            df.columns = [str(col) for col in df.columns]
+            filtered_df = df  # Gunakan df mentah jika tidak ada filter khusus
+            
+            # Tampilkan tab visualisasi peta
             render_map_tab(filtered_df, selected_sheet)
             
-        with tab4:
-            # Informasi tentang aplikasi
+        elif active_tab == "about":
+            # Konten untuk tentang aplikasi (tab4)
             st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
             
             st.markdown("""
