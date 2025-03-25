@@ -278,8 +278,8 @@ def login_page():
             st.info("""
             ### Bantuan Login
             - Username dan password default: admin / admin13
-            - Jika Anda mengalami masalah login, silakan hubungi administrator.
-            - Atau gunakan akun staff: dispendukcapil / madiun2024
+            - Atau gunakan akun Develop : Ozii / 2024
+            - Jika Anda mengalami masalah login, silakan hubungi administrator , Ozii anak baik
             """)
     
     # Close the login container
