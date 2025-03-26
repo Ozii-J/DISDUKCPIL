@@ -277,9 +277,9 @@ def login_page():
         if help_button:
             st.info("""
             ### Bantuan Login
-            - Username dan password default: admin / admin123
-            - Jika Anda mengalami masalah login, silakan hubungi administrator.
-            - Atau gunakan akun staff: dispendukcapil / madiun2024
+            - Username dan password default: admin / admin13
+            - Atau gunakan akun Develop : Ozii / 2024
+            - Jika Anda mengalami masalah login, silakan hubungi administrator , Ozii anak baik
             """)
     
     # Close the login container
@@ -306,11 +306,98 @@ def user_profile_section():
     st.sidebar.write(f"Nama: {st.session_state.user_data['name']}")
     st.sidebar.write(f"Role: {st.session_state.user_data['role'].capitalize()}")
     
-    if st.sidebar.button("Keluar"):
+    if st.sidebar.button("Keluar") :
         st.session_state.logged_in = False
         st.session_state.username = None
         st.session_state.user_data = None
         st.experimental_rerun()
+
+# ============= MENU NAVIGASI YANG DITINGKATKAN =============
+
+def create_beautiful_menu():
+    """Buat menu navigasi yang menarik dengan emoji di dalam tombol"""
+    
+    # Tambahkan CSS untuk styling tombol
+    st.markdown("""
+    <style>
+    /* Styling untuk tombol menu */
+    div.stButton > button {
+        background-color: white;
+        color: #333;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 20px 10px;
+        transition: all 0.3s;
+        font-size: 8px;
+        height: 60px;
+        display: block;
+        width: 85%;
+        margin: 0;
+        line-height: 1.2;
+        white-space: normal;
+    }
+    
+    div.stButton > button:first-line {
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: block;
+    }
+    
+    div.stButton > button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        background-color: #f0f7f4;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Inisialisasi tab aktif jika belum ada
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "viz_data"
+    
+    # Buat layout horizontal untuk item menu
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Buat tombol menu dengan emoji
+    with col1:
+        if st.button("📊\nVisualisasi Data", use_container_width=True):
+            st.session_state.active_tab = "viz_data"
+            st.experimental_rerun()
+    
+    with col2:
+        if st.button("🔄\nPerbandingan File", use_container_width=True):
+            st.session_state.active_tab = "compare"
+            st.experimental_rerun()
+    
+    with col3:
+        if st.button("🗺️\nVisualisasi Peta", use_container_width=True):
+            st.session_state.active_tab = "map_viz"
+            st.experimental_rerun()
+    
+    with col4:
+        if st.button("ℹ️\nTentang Aplikasi", use_container_width=True):
+            st.session_state.active_tab = "about"
+            st.experimental_rerun()
+    
+    # Styling khusus untuk tab aktif
+    tab_indices = {
+        "viz_data": 1,
+        "compare": 2,
+        "map_viz": 3,
+        "about": 4
+    }
+    
+    active_index = tab_indices[st.session_state.active_tab]
+    st.markdown(f"""
+    <style>
+    div[data-testid="stHorizontalBlock"] > div:nth-child({active_index}) button {{
+        background-color: #0b5f34 !important;
+        color: white !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+    
+    return st.session_state.active_tab
 
 # ============= TEMA WARNA KUSTOM =============
 
@@ -556,7 +643,6 @@ def render_kartu_keluarga_filters(filter_data):
         options=filter_data['gender_options'],
         default=filter_data['gender_options']
     )
-    
     return filter_data['get_filtered_df'](selected_kecamatan, selected_data, selected_gender)
 
 def render_penduduk_filters(filter_data):
@@ -732,8 +818,8 @@ def compare_files_page():
     
     with col2:
         file2 = st.selectbox("Pilih File Kedua", 
-                            [f for f in available_files if f != file1], 
-                            index=0 if len(available_files) > 1 else None)
+                           [f for f in available_files if f != file1], 
+                           index=0 if len(available_files) > 1 else None)
     
     # Dapatkan path lengkap file
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -812,41 +898,177 @@ def compare_files_page():
             )
             
             # Visualisasi perbandingan
-            st.subheader("Visualisasi Perbandingan")
+            st.subheader("Visualisasi Perbandingan 3D")
             
-            # Bar chart perbandingan (selalu tampilkan)
-            fig_bar = go.Figure()
+            # Create 3D bar chart using Scatter3d traces
+            fig_3d = go.Figure()
             
-            # Tambahkan bar untuk setiap kolom yang dipilih
-            for col in selected_cols:
+            # Define grid for our visualization
+            x_vals = list(range(len(merged_df.index)))
+            
+            # Create 3D visualization for file1 and file2
+            for col_idx, col in enumerate(selected_cols):
                 col1_name = f'{col} ({file1})'
                 col2_name = f'{col} ({file2})'
                 
-                fig_bar.add_trace(go.Bar(
-                    x=merged_df.index,
-                    y=merged_df[col1_name],
-                    name=f'{col} - {file1}',
-                    offsetgroup=0
-                ))
+                # Use different positions for each file
+                y_pos1 = col_idx * 2
+                y_pos2 = col_idx * 2 + 1
                 
-                fig_bar.add_trace(go.Bar(
-                    x=merged_df.index,
-                    y=merged_df[col2_name],
-                    name=f'{col} - {file2}',
-                    offsetgroup=1
-                ))
+                # Add data for file1
+                for kec_idx, kecamatan in enumerate(merged_df.index):
+                    value = merged_df.loc[kecamatan, col1_name]
+                    fig_3d.add_trace(
+                        go.Scatter3d(
+                            x=[kec_idx, kec_idx, kec_idx, kec_idx, kec_idx],
+                            y=[y_pos1, y_pos1, y_pos1+0.8, y_pos1+0.8, y_pos1],
+                            z=[0, value, value, 0, 0],
+                            mode='lines',
+                            line=dict(color='#1f77b4', width=4),
+                            surfaceaxis=0,
+                            name=f'{col} - {file1}' if kec_idx == 0 else None,
+                            showlegend=True if kec_idx == 0 else False,
+                            hoverinfo='text',
+                            hovertext=f'{kecamatan} - {col}: {value} ({file1})'
+                        )
+                    )
+                    
+                    # Add a marker at the top of the bar for better visibility
+                    fig_3d.add_trace(
+                        go.Scatter3d(
+                            x=[kec_idx],
+                            y=[y_pos1+0.4],
+                            z=[value],
+                            mode='markers',
+                            marker=dict(
+                                size=4,
+                                color='#1f77b4',
+                            ),
+                            showlegend=False,
+                            hoverinfo='text',
+                            hovertext=f'{kecamatan} - {col}: {value} ({file1})'
+                        )
+                    )
+                
+                # Add data for file2
+                for kec_idx, kecamatan in enumerate(merged_df.index):
+                    value = merged_df.loc[kecamatan, col2_name]
+                    fig_3d.add_trace(
+                        go.Scatter3d(
+                            x=[kec_idx, kec_idx, kec_idx, kec_idx, kec_idx],
+                            y=[y_pos2, y_pos2, y_pos2+0.8, y_pos2+0.8, y_pos2],
+                            z=[0, value, value, 0, 0],
+                            mode='lines',
+                            line=dict(color='#ff7f0e', width=4),
+                            surfaceaxis=0,
+                            name=f'{col} - {file2}' if kec_idx == 0 else None,
+                            showlegend=True if kec_idx == 0 else False,
+                            hoverinfo='text',
+                            hovertext=f'{kecamatan} - {col}: {value} ({file2})'
+                        )
+                    )
+                    
+                    # Add a marker at the top of the bar for better visibility
+                    fig_3d.add_trace(
+                        go.Scatter3d(
+                            x=[kec_idx],
+                            y=[y_pos2+0.4],
+                            z=[value],
+                            mode='markers',
+                            marker=dict(
+                                size=4,
+                                color='#ff7f0e',
+                            ),
+                            showlegend=False,
+                            hoverinfo='text',
+                            hovertext=f'{kecamatan} - {col}: {value} ({file2})'
+                        )
+                    )
             
-            # Perbarui layout untuk pengelompokan bar
-            fig_bar.update_layout(
-                title=f'Perbandingan Data {sheet_name}',
-                xaxis_title='Kecamatan',
-                yaxis_title='Jumlah',
-                barmode='group',
-                height=600
+            # Update layout
+            fig_3d.update_layout(
+                title=f'Perbandingan Data 3D {sheet_name}',
+                scene=dict(
+                    xaxis_title='Kecamatan',
+                    yaxis_title='Kategori',
+                    zaxis_title='Jumlah',
+                    xaxis=dict(
+                        ticktext=merged_df.index.tolist(),
+                        tickvals=list(range(len(merged_df.index)))
+                    ),
+                    yaxis=dict(
+                        ticktext=[f"{col}" for col in selected_cols],
+                        tickvals=[col_idx * 2 + 0.5 for col_idx in range(len(selected_cols))]
+                    ),
+                    aspectratio=dict(x=1.5, y=1, z=1)
+                ),
+                height=700,
+                margin=dict(l=0, r=0, b=0, t=40),
+                legend=dict(
+                    title=dict(text="Dataset"),
+                    itemsizing="constant",
+                    x=0.9,
+                    y=0.9
+                )
+            )
+            
+            # Add camera views
+            fig_3d.update_layout(
+                updatemenus=[dict(
+                    type='buttons',
+                    showactive=False,
+                    buttons=[
+                        dict(
+                            label="Tampilan Depan",
+                            method="relayout",
+                            args=["scene.camera", dict(
+                                up=dict(x=0, y=0, z=1),
+                                center=dict(x=0, y=0, z=0),
+                                eye=dict(x=0, y=-2.5, z=0)
+                            )]
+                        ),
+                        dict(
+                            label="Tampilan Atas",
+                            method="relayout",
+                            args=["scene.camera", dict(
+                                up=dict(x=0, y=1, z=0),
+                                center=dict(x=0, y=0, z=0),
+                                eye=dict(x=0, y=0, z=2.5)
+                            )]
+                        ),
+                        dict(
+                            label="Tampilan Samping",
+                            method="relayout",
+                            args=["scene.camera", dict(
+                                up=dict(x=0, y=0, z=1),
+                                center=dict(x=0, y=0, z=0),
+                                eye=dict(x=2.5, y=0, z=0)
+                            )]
+                        ),
+                        dict(
+                            label="Tampilan Isometrik",
+                            method="relayout",
+                            args=["scene.camera", dict(
+                                up=dict(x=0, y=0, z=1),
+                                center=dict(x=0, y=0, z=0),
+                                eye=dict(x=1.5, y=1.5, z=1.5)
+                            )]
+                        ),
+                    ],
+                    direction="down",
+                    pad={"r": 10, "t": 10},
+                    x=0.9,
+                    y=0.05,
+                    xanchor="right",
+                    yanchor="bottom"
+                )]
             )
             
             # Tampilkan grafik
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_3d, use_container_width=True)
+            
+            # Add a note about 3D interaction
+            st.info("🔄 Anda dapat memutar, memperbesar, dan menggeser grafik 3D untuk melihat perbandingan data dari berbagai sudut. Gunakan tombol 'Tampilan' untuk melihat dari perspektif yang berbeda.")
             
             # Hitung dan tampilkan perubahan persentase
             st.subheader("Analisis Perubahan")
@@ -896,7 +1118,8 @@ def compare_files_page():
                 )
                 
                 st.plotly_chart(fig_change, use_container_width=True)
-                # ============= MAIN FUNCTION =============
+
+# ============= MAIN FUNCTION =============
 
 def main():
     # Get the logo path for favicon
@@ -951,8 +1174,8 @@ def main():
     
     st.title("DINAS KEPENDUDUKAN DAN PENCATATAN SIPIL KAB.MADIUN")
     
-    # Membuat tab untuk navigasi dengan tab peta baru
-    tab1, tab2, tab3, tab4 = st.tabs(["Visualisasi Data", "Perbandingan Antar File", "Visualisasi Peta", "Tentang Aplikasi"])
+    # PERUBAHAN: Menggunakan menu yang telah ditingkatkan
+    active_tab = create_beautiful_menu()
     
     # File selection and handling
     st.sidebar.header("Pilihan File Data")
@@ -996,7 +1219,10 @@ def main():
         visualizer = MadiunDataVisualizer(file_path)
         sheet_names = visualizer.xls.sheet_names
       
-        with tab1:
+        # PERUBAHAN: Kode untuk setiap tab telah dikonversi ke bagian if-elif
+        
+        if active_tab == "viz_data":
+            # Konten untuk visualisasi data (tab1)
             st.sidebar.header("Pengaturan Visualisasi")
             selected_sheet = st.sidebar.selectbox(
                 "Pilih Lembar yang Akan Divisualisasikan",
@@ -1065,16 +1291,25 @@ def main():
             # Create visualizations
             create_visualizations(filtered_df, selected_sheet)
         
-        with tab2:
-            # Tambahkan halaman perbandingan
+        elif active_tab == "compare":
+            # Konten untuk perbandingan antar file (tab2)
             compare_files_page()
 
-        with tab3:
-            # Tambahkan visualisasi peta
+        elif active_tab == "map_viz":
+            # Konten untuk visualisasi peta (tab3)
+            # Untuk keperluan ini, kita perlu data yang terfilter
+            # Karena kita tidak lagi di dalam tab, kita perlu membuat variable filtered_df
+            # Sebagai contoh, kita akan menggunakan lembar pertama
+            selected_sheet = sheet_names[0]
+            df = pd.read_excel(file_path, sheet_name=selected_sheet)
+            df.columns = [str(col) for col in df.columns]
+            filtered_df = df  # Gunakan df mentah jika tidak ada filter khusus
+            
+            # Tampilkan tab visualisasi peta
             render_map_tab(filtered_df, selected_sheet)
             
-        with tab4:
-            # Informasi tentang aplikasi
+        elif active_tab == "about":
+            # Konten untuk tentang aplikasi (tab4)
             st.header("Tentang Aplikasi Visualisasi Data DISPENDUKCAPIL KAB.MADIUN")
             
             st.markdown("""

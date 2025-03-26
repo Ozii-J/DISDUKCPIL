@@ -331,7 +331,7 @@ def create_beautiful_menu():
         font-size: 8px;
         height: 60px;
         display: block;
-        width: 100%;
+        width: 85%;
         margin: 0;
         line-height: 1.2;
         white-space: normal;
