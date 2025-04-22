@@ -5,7 +5,7 @@ import json
 import time
 from PIL import Image
 
-# ============= SISTEM LOGIN - FUNGSI UTILITAS =============
+# ============= FUNGSI UTILITAS =============
 
 def load_config():
     """Load user configuration or create default if not exists"""
@@ -15,20 +15,13 @@ def load_config():
         with open(config_path, "r") as f:
             return json.load(f)
     else:
-        # Default configuration with admin user
+        # Default configuration with guest user
         default_config = {
             "users": {
-                "admin": {
-                    "password": hashlib.sha256("admin123".encode()).hexdigest(),
-                    "role": "admin",
-                    "name": "Administrator"
-                },
-                "Ozii": {
-                    "password": hashlib.sha256("2024".encode()).hexdigest(),
-                    "role": "Develop",
-                    "name": "Development"
+                "guest": {
+                    "role": "guest",
+                    "name": "Pengguna"
                 }
-                
             }
         }
         
@@ -36,15 +29,6 @@ def load_config():
             json.dump(default_config, f, indent=4)
         
         return default_config
-
-def verify_password(username, password):
-    """Verify username and password"""
-    config = load_config()
-    if username in config["users"]:
-        stored_password = config["users"][username]["password"]
-        if stored_password == hashlib.sha256(password.encode()).hexdigest():
-            return True, config["users"][username]
-    return False, None
 
 def get_logo_path():
     """Get the path to the Madiun logo file, checking multiple formats"""

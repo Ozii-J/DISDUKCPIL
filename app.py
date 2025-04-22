@@ -9,7 +9,7 @@ from PIL import Image
 
 # Import backend functions and classes
 from backend import (
-    load_config, verify_password, get_logo_path, 
+    load_config, get_logo_path, 
     MadiunDataVisualizer, get_available_files
 )
 # Import the map visualization module
@@ -27,19 +27,37 @@ def create_visualizations(filtered_df, sheet_name):
             st.warning("Kolom KECAMATAN tidak ditemukan. Beberapa fitur mungkin tidak berfungsi.")
             return
             
-        # Agregasi data per kecamatan untuk visualisasi yang lebih jelas
-        agg_df = filtered_df.groupby('KECAMATAN')[numeric_cols].sum().reset_index()
+        # Determine if we should display by desa
+        show_by_desa = 'DESA' in filtered_df.columns and len(filtered_df['DESA'].unique()) > 1 and filtered_df['KECAMATAN'].nunique() == 1
         
-        # Bar chart
-        fig_bar = px.bar(
-            agg_df,
-            x='KECAMATAN',
-            y=numeric_cols,
-            title=f'Visualisasi Data {sheet_name} per Kecamatan',
-            barmode='group',
-            height=600
-        )
-        # Rotasi label x untuk kecamatan agar lebih mudah dibaca
+        if show_by_desa:
+            # Agregasi data per desa untuk visualisasi
+            agg_df = filtered_df.groupby('DESA')[numeric_cols].sum().reset_index()
+            
+            # Bar chart berdasarkan desa
+            fig_bar = px.bar(
+                agg_df,
+                x='DESA',
+                y=numeric_cols,
+                title=f'Visualisasi Data {sheet_name} per Desa',
+                barmode='group',
+                height=600
+            )
+        else:
+            # Agregasi data per kecamatan untuk visualisasi
+            agg_df = filtered_df.groupby('KECAMATAN')[numeric_cols].sum().reset_index()
+            
+            # Bar chart berdasarkan kecamatan
+            fig_bar = px.bar(
+                agg_df,
+                x='KECAMATAN',
+                y=numeric_cols,
+                title=f'Visualisasi Data {sheet_name} per Kecamatan',
+                barmode='group',
+                height=600
+            )
+            
+        # Rotasi label x untuk kecamatan/desa agar lebih mudah dibaca
         fig_bar.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig_bar, use_container_width=True)
         
@@ -59,24 +77,39 @@ def create_visualizations(filtered_df, sheet_name):
             )
             st.plotly_chart(fig_pie, use_container_width=True)
         
-        # Heatmap untuk perbandingan antar kecamatan
-        if len(agg_df['KECAMATAN']) > 1 and len(numeric_cols) > 1:
-            # Normalisasi data untuk heatmap yang lebih intuitif
-            pivot_df = agg_df.set_index('KECAMATAN')
+        # Heatmap untuk perbandingan 
+        if len(agg_df) > 1 and len(numeric_cols) > 1:
+            if show_by_desa:
+                # Jika filter per desa, gunakan index desa
+                pivot_df = agg_df.set_index('DESA')
+                
+                # Membuat heatmap dengan colorscales yang lebih jelas
+                fig_heatmap = px.imshow(
+                    pivot_df,
+                    labels=dict(x="Kategori", y="Desa", color="Jumlah"),
+                    title=f"Heatmap Data {sheet_name} per Desa",
+                    color_continuous_scale='Viridis',
+                    aspect="auto",  # Menyesuaikan aspek rasio untuk ukuran layar
+                    height=500
+                )
+            else:
+                # Jika filter per kecamatan, gunakan index kecamatan
+                pivot_df = agg_df.set_index('KECAMATAN')
+                
+                # Membuat heatmap dengan colorscales yang lebih jelas
+                fig_heatmap = px.imshow(
+                    pivot_df,
+                    labels=dict(x="Kategori", y="Kecamatan", color="Jumlah"),
+                    title=f"Heatmap Data {sheet_name} per Kecamatan",
+                    color_continuous_scale='Viridis',
+                    aspect="auto",  # Menyesuaikan aspek rasio untuk ukuran layar
+                    height=500
+                )
             
-            # Membuat heatmap dengan colorscales yang lebih jelas
-            fig_heatmap = px.imshow(
-                pivot_df,
-                labels=dict(x="Kategori", y="Kecamatan", color="Jumlah"),
-                title=f"Heatmap Data {sheet_name} per Kecamatan",
-                color_continuous_scale='Viridis',
-                aspect="auto",  # Menyesuaikan aspek rasio untuk ukuran layar
-                height=500
-            )
             st.plotly_chart(fig_heatmap, use_container_width=True)
             
             # Tambahkan visualisasi khusus untuk lembar tertentu
-            create_special_visualizations(pivot_df, sheet_name)
+            create_special_visualizations(pivot_df, sheet_name, show_by_desa)
             
             # Tambahan visualisasi - Stacked Bar Chart untuk perbandingan proporsi
             if len(numeric_cols) > 1:
@@ -87,11 +120,14 @@ def create_visualizations(filtered_df, sheet_name):
                     if row_sum > 0:  # Hindari pembagian dengan nol
                         prop_df.loc[idx] = (prop_df.loc[idx] / row_sum) * 100
                 
+                # Gunakan judul yang sesuai berdasarkan tampilan desa atau kecamatan
+                x_label = 'Desa' if show_by_desa else 'Kecamatan'
+                
                 fig_prop = px.bar(
                     prop_df.reset_index(),
-                    x='KECAMATAN',
+                    x=pivot_df.index.name,  # Ini akan menjadi DESA atau KECAMATAN
                     y=prop_df.columns,
-                    title=f"Proporsi Data {sheet_name} per Kecamatan (%)",
+                    title=f"Proporsi Data {sheet_name} per {x_label} (%)",
                     barmode='stack',
                     height=500
                 )
@@ -100,11 +136,15 @@ def create_visualizations(filtered_df, sheet_name):
                 
             # Tambahan visualisasi - Line Chart untuk trend visual
             if len(numeric_cols) > 1:
+                # Gunakan judul yang sesuai berdasarkan tampilan desa atau kecamatan
+                x_label = 'Desa' if show_by_desa else 'Kecamatan'
+                x_col = 'DESA' if show_by_desa else 'KECAMATAN'
+                
                 fig_line = px.line(
                     agg_df,
-                    x='KECAMATAN',
+                    x=x_col,
                     y=numeric_cols,
-                    title=f"Tren Data {sheet_name} per Kecamatan",
+                    title=f"Tren Data {sheet_name} per {x_label}",
                     markers=True,
                     height=500
                 )
@@ -113,8 +153,11 @@ def create_visualizations(filtered_df, sheet_name):
     else:
         st.warning("Tidak ada kolom numerik untuk divisualisasikan")
 
-def create_special_visualizations(pivot_df, sheet_name):
+def create_special_visualizations(pivot_df, sheet_name, show_by_desa=False):
     """Create special visualizations based on sheet type"""
+    # Tentukan label untuk x-axis berdasarkan tampilan
+    x_label = 'Desa' if show_by_desa else 'Kecamatan'
+    
     if 'AKTA' in sheet_name.upper():
         # Skip the percentage bar chart specifically for AKTA 0 SD 17 sheets
         if not any(akta_keyword in sheet_name.upper() for akta_keyword in ['AKTA 0 SD 17', 'AKTA 0-17']):
@@ -130,9 +173,9 @@ def create_special_visualizations(pivot_df, sheet_name):
                     
                     fig_ratio = px.bar(
                         ratio_df.reset_index(),
-                        x='KECAMATAN',
+                        x=pivot_df.index.name,  # This will be either 'KECAMATAN' or 'DESA'
                         y=['% Memiliki', '% Belum Memiliki'],
-                        title="Persentase Kepemilikan Akta per Kecamatan",
+                        title=f"Persentase Kepemilikan Akta per {x_label}",
                         barmode='stack',
                         height=500
                     )
@@ -173,9 +216,9 @@ def create_special_visualizations(pivot_df, sheet_name):
                     if pct_cols:
                         fig_pct = px.bar(
                             ratio_df.reset_index(),
-                            x='KECAMATAN',
+                            x=pivot_df.index.name,  # This will be either 'KECAMATAN' or 'DESA'
                             y=pct_cols,
-                            title="Distribusi Status Perkawinan per Kecamatan (%)",
+                            title=f"Distribusi Status Perkawinan per {x_label} (%)",
                             barmode='stack',
                             height=500
                         )
@@ -199,34 +242,34 @@ def create_special_visualizations(pivot_df, sheet_name):
             # Visualisasi persentase
             fig_ratio = px.bar(
                 ratio_df.reset_index(),
-                x='KECAMATAN',
+                x=pivot_df.index.name,  # This will be either 'KECAMATAN' or 'DESA'
                 y=['% KK Laki-laki', '% KK Perempuan'],
-                title="Persentase Kepala Keluarga Berdasarkan Gender",
+                title=f"Persentase Kepala Keluarga Berdasarkan Gender per {x_label}",
                 barmode='stack',
                 height=500
             )
             fig_ratio.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig_ratio, use_container_width=True)
 
-# ============= SISTEM LOGIN - HALAMAN LOGIN =============
+# ============= WELCOME PAGE =============
 
-def login_page():
-    """Display the login page with Madiun logo"""
+def welcome_page():
+    """Display the welcome page with Madiun logo and Start button"""
     # Apply the custom theme
     set_custom_theme()
     
-    # Create a nice container for login form
+    # Create a nice container for welcome screen
     st.markdown('<div class="login-container">', unsafe_allow_html=True)
     
-    # Pendekatan sederhana kembali ke penggunaan kolom yang tepat
-    logo_col1, logo_col2, logo_col3 = st.columns([2.2, 2, 1])
+    # Logo display in center
+    col1, col2, col3 = st.columns([2.15, 2, 1])
     
-    with logo_col2:
-        # Tampilkan logo dengan ukuran yang lebih kecil
+    with col2:
+        # Tampilkan logo dengan ukuran yang lebih besar
         logo_path = get_logo_path()
         if logo_path:
             try:
-                st.image(Image.open(logo_path), width=150)  # Ukuran dikurangi menjadi 150px
+                st.image(Image.open(logo_path), width=200)
             except Exception as e:
                 st.warning(f"Error loading logo: {str(e)}")
                 st.warning("Logo tidak dapat ditampilkan. Pastikan file logo valid.")
@@ -237,54 +280,30 @@ def login_page():
     st.markdown("<h1 style='text-align: center;'>DISPENDUKCAPIL KAB.MADIUN</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Sistem Visualisasi Data Kependudukan</h3>", unsafe_allow_html=True)
     
-    # Form login dengan kotak terpusat
-    st.markdown("<p style='text-align: center; margin-top: 30px;'>Silakan masuk untuk melanjutkan</p>", unsafe_allow_html=True)
+    # Deskripsi singkat tentang aplikasi
+    st.markdown("<p style='text-align: center; margin: 30px 0;'>Aplikasi ini menyediakan visualisasi data kependudukan Kabupaten Madiun secara interaktif, memudahkan akses dan analisis informasi kependudukan.</p>", unsafe_allow_html=True)
     
-    # Gunakan kolom untuk form login
-    login_col1, login_col2, login_col3 = st.columns([1, 2, 1])
+    # Tombol Start di tengah
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    with login_col2:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+    with col2:
+        start_button = st.button("MULAI APLIKASI", use_container_width=True)
         
-        # Buat kolom untuk tombol
-        button_col1, button_col2 = st.columns([1, 1])
-        
-        with button_col1:
-            login_button = st.button("Masuk", use_container_width=True)
-        
-        with button_col2:
-            help_button = st.button("Bantuan", use_container_width=True)
-            
-        if login_button:
-            if username and password:
-                with st.spinner("Memeriksa kredensial..."):
-                    time.sleep(1)  # Simulate verification delay
-                    success, user_data = verify_password(username, password)
-                    
-                    if success:
-                        st.session_state.logged_in = True
-                        st.session_state.username = username
-                        st.session_state.user_data = user_data
-                        st.success(f"Selamat datang, {user_data['name']}!")
-                        time.sleep(1)  # Short delay before redirecting
-                        st.experimental_rerun()
-                    else:
-                        st.error("Username atau password salah. Silakan coba lagi.")
-            else:
-                st.warning("Silakan masukkan username dan password.")
-                
-        if help_button:
-            st.info("""
-            ### Bantuan Login
-            - Username dan password default: admin / admin13
-            - Atau gunakan akun Develop : Ozii / 2024
-            - Jika Anda mengalami masalah login, silakan hubungi administrator , Ozii anak baik
-            """)
+        if start_button:
+            with st.spinner("Mempersiapkan aplikasi..."):
+                time.sleep(1)  # Slight delay for better UX
+                # Set default values in session state
+                st.session_state.logged_in = True
+                st.session_state.username = "guest"
+                st.session_state.user_data = {"name": "Pengguna", "role": "guest"}
+                st.success("Selamat datang di Sistem Visualisasi Data Kependudukan!")
+                time.sleep(0.5)  # Short delay before redirecting
+                st.experimental_rerun()
     
     # Close the login container
     st.markdown('</div>', unsafe_allow_html=True)
     
+    # Footer
     st.markdown("<div style='text-align: center; margin-top: 50px;'>&copy; 2025 Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun</div>", unsafe_allow_html=True)
 
 def add_logo():
@@ -301,11 +320,14 @@ def add_logo():
         st.sidebar.warning("Logo tidak ditemukan. Silakan tambahkan file 'madiun_logo.jpg' atau 'madiun_logo.png' ke direktori aplikasi.")
 
 def user_profile_section():
-    """Display user profile information in the sidebar"""
-    st.sidebar.subheader("Profil Pengguna")
-    st.sidebar.write(f"Nama: {st.session_state.user_data['name']}")
-    st.sidebar.write(f"Role: {st.session_state.user_data['role'].capitalize()}")
+    """Display simplified user information in the sidebar"""
+    st.sidebar.subheader("Pengguna")
     
+    # Display user info if available, otherwise show generic info
+    name = st.session_state.user_data.get("name", "Pengguna") if hasattr(st.session_state, "user_data") else "Pengguna"
+    st.sidebar.write(f"Nama: {name}")
+    
+    # Add logout button that resets the session
     if st.sidebar.button("Keluar") :
         st.session_state.logged_in = False
         st.session_state.username = None
@@ -494,12 +516,22 @@ def render_akta_filters(filter_data):
     """Render filter UI for AKTA sheet"""
     st.sidebar.subheader("Filter Data AKTA")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     if filter_data['type'] == 'age_format':
         # First semester format (AKTA 0 SD 17 DESA)
@@ -516,7 +548,7 @@ def render_akta_filters(filter_data):
             default=filter_data['status_options']
         )
         
-        return filter_data['get_filtered_df'](selected_kecamatan, selected_usia, selected_status)
+        return filter_data['get_filtered_df']([selected_kecamatan], selected_usia, selected_status, selected_desa)
         
     elif filter_data['type'] == 'gender_format':
         # Second semester format (AKTA with gender breakdown)
@@ -534,22 +566,32 @@ def render_akta_filters(filter_data):
             default=filter_data['status_options']
         )
         
-        return filter_data['get_filtered_df'](selected_kecamatan, selected_gender, selected_status)
+        return filter_data['get_filtered_df']([selected_kecamatan], selected_gender, selected_status, selected_desa)
     
     else:
         # Fallback for unknown format
-        return filter_data['get_filtered_df'](selected_kecamatan)
+        return filter_data['get_filtered_df']([selected_kecamatan], selected_desa)
 
 def render_ktp_filters(filter_data):
     """Render filter UI for KTP sheet"""
     st.sidebar.subheader("Filter Data KTP")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Jenis Kelamin
     selected_gender = st.sidebar.multiselect(
@@ -564,18 +606,28 @@ def render_ktp_filters(filter_data):
         options=filter_data['ktp_categories']
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_gender, selected_category)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_gender, selected_category, selected_desa)
 
 def render_agama_filters(filter_data):
     """Render filter UI for AGAMA sheet"""
     st.sidebar.subheader("Filter Data Agama")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Agama
     selected_agama = st.sidebar.multiselect(
@@ -590,18 +642,28 @@ def render_agama_filters(filter_data):
         options=['JUMLAH', 'DETAIL GENDER']
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_agama, data_type)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_agama, data_type, selected_desa)
 
 def render_kia_filters(filter_data):
     """Render filter UI for KIA sheet"""
     st.sidebar.subheader("Filter Data KIA")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Status KIA
     selected_status = st.sidebar.multiselect(
@@ -617,18 +679,28 @@ def render_kia_filters(filter_data):
         default=filter_data['gender_options']
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_status, selected_gender)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_status, selected_gender, selected_desa)
 
 def render_kartu_keluarga_filters(filter_data):
     """Render filter UI for Kartu Keluarga sheet"""
     st.sidebar.subheader("Filter Data Kartu Keluarga")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Data yang akan ditampilkan
     selected_data = st.sidebar.selectbox(
@@ -643,18 +715,29 @@ def render_kartu_keluarga_filters(filter_data):
         options=filter_data['gender_options'],
         default=filter_data['gender_options']
     )
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_data, selected_gender)
+    
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_data, selected_gender, selected_desa)
 
 def render_penduduk_filters(filter_data):
     """Render filter UI for Penduduk sheet"""
     st.sidebar.subheader("Filter Data Penduduk")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Jenis Kelamin
     selected_gender = st.sidebar.multiselect(
@@ -672,18 +755,32 @@ def render_penduduk_filters(filter_data):
             default=[]
         )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_gender, selected_usia)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_gender, selected_usia, selected_desa)
 
 def render_kelompok_umur_filters(filter_data):
     """Render filter UI for Kelompok Umur sheet"""
     st.sidebar.subheader("Filter Data Kelompok Umur")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
-        "Pilih Kecamatan",
-        options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
-    )
+    # Filter Kecamatan with selectbox (keep ALL option) if kecamatan exists
+    selected_kecamatan = 'ALL'
+    selected_desa = []
+    
+    if filter_data['kecamatan_list']:
+        selected_kecamatan = st.sidebar.selectbox(
+            "Pilih Kecamatan",
+            options=filter_data['kecamatan_list'],
+            index=0  # Default to ALL
+        )
+        
+        # Show desa selection only if a specific kecamatan is selected
+        if selected_kecamatan != 'ALL':
+            desa_list = filter_data['get_desa_list']([selected_kecamatan])
+            if desa_list:
+                selected_desa = st.sidebar.multiselect(
+                    "Pilih Desa",
+                    options=desa_list,
+                    default=[]
+                )
     
     # Filter Kelompok Umur
     available_umur_options = []
@@ -710,18 +807,28 @@ def render_kelompok_umur_filters(filter_data):
         options=['Jumlah Absolut', 'Persentase']
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_umur, selected_display)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_umur, selected_display, selected_desa)
 
 def render_pendidikan_filters(filter_data):
     """Render filter UI for Pendidikan sheet"""
     st.sidebar.subheader("Filter Data Pendidikan")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Filter Jenjang Pendidikan
     selected_pendidikan = st.sidebar.multiselect(
@@ -730,18 +837,28 @@ def render_pendidikan_filters(filter_data):
         default=filter_data['pendidikan_list'][:3] if len(filter_data['pendidikan_list']) > 3 else filter_data['pendidikan_list']
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_pendidikan)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_pendidikan, selected_desa)
 
 def render_pekerjaan_filters(filter_data):
     """Render filter UI for Pekerjaan sheet"""
     st.sidebar.subheader("Filter Data Pekerjaan")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     # Kelompokkan pekerjaan jika terlalu banyak
     pekerjaan_options = filter_data['pekerjaan_list']
@@ -758,18 +875,28 @@ def render_pekerjaan_filters(filter_data):
         default=pekerjaan_options[:6] if len(pekerjaan_options) > 6 else pekerjaan_options
     )
     
-    return filter_data['get_filtered_df'](selected_kecamatan, selected_pekerjaan)
+    return filter_data['get_filtered_df']([selected_kecamatan], selected_pekerjaan, selected_desa)
 
 def render_perkawinan_filters(filter_data):
     """Render filter UI for Perkawinan sheet"""
     st.sidebar.subheader("Filter Data Status Perkawinan")
     
-    # Filter Kecamatan
-    selected_kecamatan = st.sidebar.multiselect(
+    # Filter Kecamatan with selectbox (keep ALL option)
+    selected_kecamatan = st.sidebar.selectbox(
         "Pilih Kecamatan",
         options=filter_data['kecamatan_list'],
-        default=filter_data['kecamatan_list']
+        index=0  # Default to ALL
     )
+    
+    # Show desa selection only if a specific kecamatan is selected
+    selected_desa = []
+    if selected_kecamatan != 'ALL':
+        desa_list = filter_data['get_desa_list']([selected_kecamatan])
+        selected_desa = st.sidebar.multiselect(
+            "Pilih Desa",
+            options=desa_list,
+            default=[]
+        )
     
     if filter_data['type'] == 'gender_breakdown':
         # This is the KK KAWIN or PERKAWINAN format with gender breakdown
@@ -787,7 +914,7 @@ def render_perkawinan_filters(filter_data):
             default=filter_data['gender_options']
         )
         
-        return filter_data['get_filtered_df'](selected_kecamatan, selected_status, selected_gender)
+        return filter_data['get_filtered_df']([selected_kecamatan], selected_status, selected_gender, selected_desa)
     else:
         # Old PERKAWINAN format without gender breakdown
         # Filter Status Perkawinan
@@ -797,7 +924,7 @@ def render_perkawinan_filters(filter_data):
             default=filter_data['status_list']
         )
         
-        return filter_data['get_filtered_df'](selected_kecamatan, selected_status)
+        return filter_data['get_filtered_df']([selected_kecamatan], selected_status, selected_desa)
 
 def compare_files_page():
     """Halaman perbandingan data antar file"""
@@ -1161,11 +1288,11 @@ def main():
         st.session_state.user_data = None
     
     # Check if user is logged in
-    if not st.session_state.logged_in:
-        login_page()
+    if not st.session_state.get("logged_in", False):
+        welcome_page()
         return
     
-    # If logged in, show the main application
+    # If logged in or started, show the main application
     # Add logo at the top of the sidebar
     add_logo()
     
@@ -1236,60 +1363,70 @@ def main():
             
             df = pd.read_excel(file_path, sheet_name=selected_sheet)
             
-            # Tampilkan data mentah (opsional)
-            if st.sidebar.checkbox("Tampilkan Data Mentah"):
-                st.subheader(f"Data Mentah - {selected_sheet}")
-                st.dataframe(df, use_container_width=True)
+            # Tampilkan data mentah terlebih dahulu
+            st.subheader(f"Data Mentah - {selected_sheet}")
+            st.dataframe(df, use_container_width=True)
             
             # Convert all column names to string to avoid errors
             df.columns = [str(col) for col in df.columns]
             
-            # Apply appropriate filter based on sheet name
-            if any(akta_keyword in selected_sheet.upper() for akta_keyword in ['AKTA', 'AKTA 0', 'AKTA 0 SD 17']):
-                filter_data = visualizer.add_akta_filters(df)
-                filtered_df = render_akta_filters(filter_data)
-            elif 'KTP' in selected_sheet.upper():
-                filter_data = visualizer.add_ktp_filters(df)
-                filtered_df = render_ktp_filters(filter_data)
-            elif 'AGAMA' in selected_sheet.upper():
-                filter_data = visualizer.add_agama_filters(df)
-                filtered_df = render_agama_filters(filter_data)
-            elif 'KIA' in selected_sheet.upper():
-                filter_data = visualizer.add_kia_filters(df)
-                filtered_df = render_kia_filters(filter_data)
-            elif any(kk_keyword in selected_sheet.upper() for kk_keyword in ['KARTU KELUARGA', 'KK']):
-                # Make sure it's actually KK data and not KK KAWIN data
-                if 'KAWIN' not in selected_sheet.upper():
-                    filter_data = visualizer.add_kartu_keluarga_filters(df)
-                    filtered_df = render_kartu_keluarga_filters(filter_data)
-                else:  # This is for KK KAWIN sheets
+            # Add a filter button to trigger filtering
+            filter_section = st.sidebar.expander("Pengaturan Filter", expanded=True)
+            
+            filtered_df = None
+            
+            with filter_section:
+                # Apply appropriate filter based on sheet name
+                if any(akta_keyword in selected_sheet.upper() for akta_keyword in ['AKTA', 'AKTA 0', 'AKTA 0 SD 17']):
+                    filter_data = visualizer.add_akta_filters(df)
+                    filtered_df = render_akta_filters(filter_data)
+                elif 'KTP' in selected_sheet.upper():
+                    filter_data = visualizer.add_ktp_filters(df)
+                    filtered_df = render_ktp_filters(filter_data)
+                elif 'AGAMA' in selected_sheet.upper():
+                    filter_data = visualizer.add_agama_filters(df)
+                    filtered_df = render_agama_filters(filter_data)
+                elif 'KIA' in selected_sheet.upper():
+                    filter_data = visualizer.add_kia_filters(df)
+                    filtered_df = render_kia_filters(filter_data)
+                elif any(kk_keyword in selected_sheet.upper() for kk_keyword in ['KARTU KELUARGA', 'KK']):
+                    # Make sure it's actually KK data and not KK KAWIN data
+                    if 'KAWIN' not in selected_sheet.upper():
+                        filter_data = visualizer.add_kartu_keluarga_filters(df)
+                        filtered_df = render_kartu_keluarga_filters(filter_data)
+                    else:  # This is for KK KAWIN sheets
+                        filter_data = visualizer.add_perkawinan_filters(df)
+                        filtered_df = render_perkawinan_filters(filter_data)
+                elif 'PENDUDUK' in selected_sheet.upper():
+                    filter_data = visualizer.add_penduduk_filters(df)
+                    filtered_df = render_penduduk_filters(filter_data)
+                elif 'PENDIDIKAN' in selected_sheet.upper():
+                    filter_data = visualizer.add_pendidikan_filters(df)
+                    filtered_df = render_pendidikan_filters(filter_data)
+                elif 'PEKERJAAN' in selected_sheet.upper():
+                    filter_data = visualizer.add_pekerjaan_filters(df)
+                    filtered_df = render_pekerjaan_filters(filter_data)
+                elif any(kawin_keyword in selected_sheet.upper() for kawin_keyword in ['PERKAWINAN', 'KAWIN']):
                     filter_data = visualizer.add_perkawinan_filters(df)
                     filtered_df = render_perkawinan_filters(filter_data)
-            elif 'PENDUDUK' in selected_sheet.upper():
-                filter_data = visualizer.add_penduduk_filters(df)
-                filtered_df = render_penduduk_filters(filter_data)
-            elif 'PENDIDIKAN' in selected_sheet.upper():
-                filter_data = visualizer.add_pendidikan_filters(df)
-                filtered_df = render_pendidikan_filters(filter_data)
-            elif 'PEKERJAAN' in selected_sheet.upper():
-                filter_data = visualizer.add_pekerjaan_filters(df)
-                filtered_df = render_pekerjaan_filters(filter_data)
-            elif any(kawin_keyword in selected_sheet.upper() for kawin_keyword in ['PERKAWINAN', 'KAWIN']):
-                filter_data = visualizer.add_perkawinan_filters(df)
-                filtered_df = render_perkawinan_filters(filter_data)
-            elif any(umur_keyword in selected_sheet.upper() for umur_keyword in ['KEL UMUR', 'KELOMPOK UMUR', 'UMUR']):
-                filter_data = visualizer.add_kelompok_umur_filters(df)
-                filtered_df = render_kelompok_umur_filters(filter_data)
-            else:
-                st.warning(f"Tidak ada filter khusus untuk lembar {selected_sheet}")
-                filtered_df = df
+                elif any(umur_keyword in selected_sheet.upper() for umur_keyword in ['KEL UMUR', 'KELOMPOK UMUR', 'UMUR']):
+                    filter_data = visualizer.add_kelompok_umur_filters(df)
+                    filtered_df = render_kelompok_umur_filters(filter_data)
+                else:
+                    st.warning(f"Tidak ada filter khusus untuk lembar {selected_sheet}")
+                    filtered_df = df
+                
+                # Filter button at the bottom of the filter section
+                filter_applied = st.button("Terapkan Filter", use_container_width=True)
             
-            # Tampilkan data yang sudah difilter
-            st.subheader(f"Data Terfilter - {selected_sheet}")
-            st.dataframe(filtered_df, use_container_width=True)
-            
-            # Create visualizations
-            create_visualizations(filtered_df, selected_sheet)
+            # Only show filtered data and visualizations if filter is applied
+            if filter_applied and filtered_df is not None:
+                # Tampilkan data yang sudah difilter
+                st.subheader(f"Data Terfilter - {selected_sheet}")
+                st.dataframe(filtered_df, use_container_width=True)
+                
+                # Create visualizations
+                create_visualizations(filtered_df, selected_sheet)
         
         elif active_tab == "compare":
             # Konten untuk perbandingan antar file (tab2)
@@ -1331,7 +1468,8 @@ def main():
             1. Pilih file data yang ingin digunakan dari sidebar
             2. Pilih lembar data yang ingin divisualisasikan
             3. Sesuaikan filter yang tersedia
-            4. Lihat hasil visualisasi dalam bentuk tabel dan grafik
+            4. Klik tombol "Terapkan Filter" untuk melihat hasil
+            5. Lihat hasil visualisasi dalam bentuk tabel dan grafik
             
             ### Sumber Data
             Data yang digunakan dalam aplikasi ini bersumber dari Dinas Kependudukan dan Pencatatan Sipil Kabupaten Madiun.
