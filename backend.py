@@ -76,44 +76,79 @@ class MadiunDataVisualizer:
         is_gender_format = any('LK (MEMILIKI)' in str(col).upper() for col in df.columns)
         is_age_format = any('(0-5 TAHUN)' in str(col).upper() for col in df.columns)
         
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
+        
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
         if is_age_format:
             # First semester format (AKTA 0 SD 17 DESA)
+            # Filter Kategori Usia
             usia_options = ['KESELURUHAN', '0-5 TAHUN', '0-17 TAHUN']
             status_options = ['MEMILIKI', 'BELUM MEMILIKI']
             
             # Kolom yang akan digunakan berdasarkan usia parameter
-            def get_filtered_df(kecamatan_list, selected_usia, selected_status):
-                filtered_df = df[df['KECAMATAN'].isin(kecamatan_list)]
+            def get_filtered_df(selected_kecamatan, selected_usia, selected_status, selected_desa=None):
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+                
+                # Apply desa filter if provided and a specific kecamatan is selected
+                if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                    filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                    
                 cols_to_use = [col for col in df.columns if isinstance(col, str) and selected_usia.lower() in col.lower()]
                 status_cols = [col for col in cols_to_use if any(status.upper() in col.upper() for status in selected_status)]
                 return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
             
             return {
                 'type': 'age_format',
-                'kecamatan_list': df['KECAMATAN'].unique(),
+                'kecamatan_list': ['ALL'] + kecamatan_list,
+                'get_desa_list': get_desa_list,
                 'usia_options': usia_options,
                 'status_options': status_options,
                 'get_filtered_df': get_filtered_df
             }
-        
+            
         elif is_gender_format:
             # Second semester format (AKTA with gender breakdown)
+            # Filter Jenis Kelamin
             gender_options = ['LK', 'PR', 'JML']
             status_options = ['MEMILIKI', 'BELUM MEMILIKI']
             
-            def get_filtered_df(kecamatan_list, selected_gender, selected_status):
-                filtered_df = df[df['KECAMATAN'].isin(kecamatan_list)]
+            def get_filtered_df(selected_kecamatan, selected_gender, selected_status, selected_desa=None):
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+                
+                # Apply desa filter if provided and a specific kecamatan is selected
+                if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                    filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                    
+                # Build column selections based on both status and gender
                 status_cols = []
                 for gender in selected_gender:
                     for status in selected_status:
                         col_name = f"{gender} ({status})"
                         if col_name in df.columns:
                             status_cols.append(col_name)
+                
                 return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
             
             return {
                 'type': 'gender_format',
-                'kecamatan_list': df['KECAMATAN'].unique(),
+                'kecamatan_list': ['ALL'] + kecamatan_list,
+                'get_desa_list': get_desa_list,
                 'gender_options': gender_options,
                 'status_options': status_options,
                 'get_filtered_df': get_filtered_df
@@ -123,30 +158,59 @@ class MadiunDataVisualizer:
             # Fallback for unknown format
             numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
             
-            def get_filtered_df(kecamatan_list):
-                filtered_df = df[df['KECAMATAN'].isin(kecamatan_list)]
+            def get_filtered_df(selected_kecamatan, selected_desa=None):
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+                
+                # Apply desa filter if provided and a specific kecamatan is selected
+                if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                    filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                    
                 return filtered_df[['KECAMATAN', 'DESA'] + list(numeric_cols)]
             
             return {
                 'type': 'unknown_format',
-                'kecamatan_list': df['KECAMATAN'].unique(),
+                'kecamatan_list': ['ALL'] + kecamatan_list,
+                'get_desa_list': get_desa_list,
                 'get_filtered_df': get_filtered_df
             }
 
     def add_ktp_filters(self, df):
         """Filter khusus untuk lembar KTP"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         gender_options = ['LK', 'PR']
         ktp_categories = ['WAJIB KTP', 'PEREKAMAN KTP-EL', 'PENCETAKAN KTP-EL']
         
-        def get_filtered_df(selected_kecamatan, selected_gender, selected_category):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_gender, selected_category, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+            
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             gender_cols = [col for col in df.columns if any(gender in col for gender in selected_gender) 
                           and selected_category in col]
             return filtered_df[['KECAMATAN', 'DESA'] + gender_cols]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'gender_options': gender_options,
             'ktp_categories': ktp_categories,
             'get_filtered_df': get_filtered_df
@@ -154,13 +218,30 @@ class MadiunDataVisualizer:
 
     def add_agama_filters(self, df):
         """Filter khusus untuk lembar AGAMA"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         agama_list = ['ISLAM', 'KRISTEN', 'KATHOLIK', 'HINDU', 'BUDHA', 'KONGHUCHU', 
                       'KEPERCAYAAN TERHADAP TUHAN YME']
         
-        def get_filtered_df(selected_kecamatan, selected_agama, data_type):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_agama, data_type, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
             
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             if data_type == 'JUMLAH':
                 agama_cols = [f'JUMLAH ({agama})' for agama in selected_agama]
             else:
@@ -171,20 +252,38 @@ class MadiunDataVisualizer:
             return filtered_df[['KECAMATAN', 'DESA'] + agama_cols]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'agama_list': agama_list,
             'get_filtered_df': get_filtered_df
         }
 
     def add_kia_filters(self, df):
         """Filter khusus untuk lembar KIA"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         status_options = ['MEMILIKI KIA', 'BELUM MEMILIKI KIA']
         gender_options = ['LK', 'PR']
         
-        def get_filtered_df(selected_kecamatan, selected_status, selected_gender):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_status, selected_gender, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
             
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             status_cols = []
             for status in selected_status:
                 status_cols.extend([f'{gender} ({status})' for gender in selected_gender])
@@ -192,7 +291,8 @@ class MadiunDataVisualizer:
             return filtered_df[['KECAMATAN', 'DESA'] + status_cols]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'status_options': status_options,
             'gender_options': gender_options,
             'get_filtered_df': get_filtered_df
@@ -200,13 +300,30 @@ class MadiunDataVisualizer:
 
     def add_kartu_keluarga_filters(self, df):
         """Filter khusus untuk lembar Kartu Keluarga"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         data_options = ['JML KEP. KELUARGA', 'JUMLAH PENDUDUK']
         gender_options = ['LK', 'PR', 'JUMLAH']
         
-        def get_filtered_df(selected_kecamatan, selected_data, selected_gender):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_data, selected_gender, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
             
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             columns_to_use = []
             for gender in selected_gender:
                 column_name = f"{gender} ({selected_data})"
@@ -216,7 +333,8 @@ class MadiunDataVisualizer:
             return filtered_df[['KECAMATAN', 'DESA'] + columns_to_use]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'data_options': data_options,
             'gender_options': gender_options,
             'get_filtered_df': get_filtered_df
@@ -224,15 +342,32 @@ class MadiunDataVisualizer:
 
     def add_penduduk_filters(self, df):
         """Filter khusus untuk lembar Penduduk"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         gender_options = ['LAKI-LAKI', 'PEREMPUAN', 'TOTAL']
         
         # Filter Kelompok Usia (jika ada)
         usia_groups = [col for col in df.columns if 'USIA' in col] if any('USIA' in col for col in df.columns) else []
         
-        def get_filtered_df(selected_kecamatan, selected_gender, selected_usia):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_gender, selected_usia, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
             
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             gender_cols = [col for col in df.columns if any(gender in col.upper() for gender in selected_gender)]
             usia_cols = selected_usia if selected_usia else []
             
@@ -241,7 +376,8 @@ class MadiunDataVisualizer:
             return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'gender_options': gender_options,
             'usia_groups': usia_groups,
             'get_filtered_df': get_filtered_df
@@ -249,7 +385,8 @@ class MadiunDataVisualizer:
         
     def add_kelompok_umur_filters(self, df):
         """Filter khusus untuk lembar Kelompok Umur"""
-        kecamatan_list = df['KECAMATAN'].unique() if 'KECAMATAN' in df.columns else []
+        # Get kecamatan list and add ALL option if kecamatan exists
+        kecamatan_list = list(df['KECAMATAN'].unique()) if 'KECAMATAN' in df.columns else []
         
         # Deteksi kolom kelompok umur
         umur_cols = []
@@ -272,12 +409,30 @@ class MadiunDataVisualizer:
                 'Lansia (55+ tahun)': [col for col in umur_cols if any(x in col for x in ['55-59', '55 - 59', '60-64', '60 - 64', '65-69', '65 - 69', '70-74', '70 - 74', '75+', '75 +'])]
             }
         
-        def get_filtered_df(selected_kecamatan, selected_umur, selected_display):
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            if 'DESA' in df.columns:
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    return list(df['DESA'].unique())
+                else:
+                    return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+            return []
+        
+        def get_filtered_df(selected_kecamatan, selected_umur, selected_display, selected_desa=None):
             if 'KECAMATAN' in df.columns:
-                filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
             else:
-                filtered_df = df
+                filtered_df = df.copy()
             
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if 'DESA' in df.columns and selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             # Jika pilihan tampilan adalah persentase, hitung persentase
             if selected_display == 'Persentase' and selected_umur:
                 # Hitung total untuk setiap baris
@@ -292,23 +447,24 @@ class MadiunDataVisualizer:
                 selected_cols = [f'{col} (%)' for col in selected_umur]
                 
                 # Kembalikan dataframe dengan kolom yang dipilih
-                if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
-                    return filtered_df[['KECAMATAN', 'DESA'] + selected_cols]
-                elif 'KECAMATAN' in df.columns:
-                    return filtered_df[['KECAMATAN'] + selected_cols]
-                else:
-                    return filtered_df[selected_cols]
+                base_cols = []
+                if 'KECAMATAN' in df.columns:
+                    base_cols.append('KECAMATAN')
+                if 'DESA' in df.columns:
+                    base_cols.append('DESA')
+                return filtered_df[base_cols + selected_cols]
             else:
                 # Kembalikan dataframe dengan jumlah absolut
-                if 'KECAMATAN' in df.columns and 'DESA' in df.columns:
-                    return filtered_df[['KECAMATAN', 'DESA'] + selected_umur]
-                elif 'KECAMATAN' in df.columns:
-                    return filtered_df[['KECAMATAN'] + selected_umur]
-                else:
-                    return filtered_df[selected_umur]
+                base_cols = []
+                if 'KECAMATAN' in df.columns:
+                    base_cols.append('KECAMATAN')
+                if 'DESA' in df.columns:
+                    base_cols.append('DESA')
+                return filtered_df[base_cols + selected_umur]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list if kecamatan_list else [],
+            'get_desa_list': get_desa_list,
             'umur_cols': umur_cols,
             'umur_categories': umur_categories,
             'get_filtered_df': get_filtered_df
@@ -316,23 +472,51 @@ class MadiunDataVisualizer:
 
     def add_pendidikan_filters(self, df):
         """Filter khusus untuk lembar Pendidikan"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         pendidikan_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
         
-        def get_filtered_df(selected_kecamatan, selected_pendidikan):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
+        
+        def get_filtered_df(selected_kecamatan, selected_pendidikan, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+            
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             return filtered_df[['KECAMATAN', 'DESA'] + selected_pendidikan]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'pendidikan_list': pendidikan_list,
             'get_filtered_df': get_filtered_df
         }
 
     def add_pekerjaan_filters(self, df):
         """Filter khusus untuk lembar Pekerjaan"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
         pekerjaan_list = [col for col in df.columns if col not in ['KECAMATAN', 'DESA']]
+        
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
         
         # Kelompokkan pekerjaan jika terlalu banyak
         pekerjaan_groups = {}
@@ -347,12 +531,22 @@ class MadiunDataVisualizer:
                 'LAINNYA': [col for col in pekerjaan_list if not any(k in col.upper() for k in ['TANI', 'NELAYAN', 'TERNAK', 'GURU', 'DOSEN', 'PENDIDIK', 'DOKTER', 'PERAWAT', 'BIDAN', 'DAGANG', 'JUAL', 'WIRASWASTA', 'BURUH', 'KARYAWAN', 'PEGAWAI'])]
             }
         
-        def get_filtered_df(selected_kecamatan, selected_pekerjaan):
-            filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+        def get_filtered_df(selected_kecamatan, selected_pekerjaan, selected_desa=None):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                filtered_df = df.copy()
+            else:
+                filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+            
+            # Apply desa filter if provided and a specific kecamatan is selected
+            if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                
             return filtered_df[['KECAMATAN', 'DESA'] + selected_pekerjaan]
         
         return {
-            'kecamatan_list': kecamatan_list,
+            'kecamatan_list': ['ALL'] + kecamatan_list,
+            'get_desa_list': get_desa_list,
             'pekerjaan_list': pekerjaan_list,
             'pekerjaan_groups': pekerjaan_groups,
             'get_filtered_df': get_filtered_df
@@ -360,7 +554,16 @@ class MadiunDataVisualizer:
 
     def add_perkawinan_filters(self, df):
         """Filter khusus untuk lembar Status Perkawinan atau KK KAWIN"""
-        kecamatan_list = df['KECAMATAN'].unique()
+        # Get kecamatan list and add ALL option
+        kecamatan_list = list(df['KECAMATAN'].unique())
+        
+        # Function to get desa list based on selected kecamatan
+        def get_desa_list(selected_kecamatan):
+            # Check if ALL is selected or a specific kecamatan
+            if selected_kecamatan[0] == 'ALL':
+                return list(df['DESA'].unique())
+            else:
+                return list(df[df['KECAMATAN'] == selected_kecamatan[0]]['DESA'].unique())
         
         # Common status categories across both formats
         status_categories = ['BELUM KAWIN', 'KAWIN', 'CERAI HIDUP', 'CERAI MATI']
@@ -373,9 +576,17 @@ class MadiunDataVisualizer:
             # This is the KK KAWIN or PERKAWINAN format with gender breakdown
             gender_options = ['LK', 'PR', 'JML']
             
-            def get_filtered_df(selected_kecamatan, selected_status, selected_gender):
-                filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            def get_filtered_df(selected_kecamatan, selected_status, selected_gender, selected_desa=None):
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
                 
+                # Apply desa filter if provided and a specific kecamatan is selected
+                if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                    filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                    
                 # Build column selections based on both status and gender
                 status_cols = []
                 for gender in selected_gender:
@@ -388,7 +599,8 @@ class MadiunDataVisualizer:
             
             return {
                 'type': 'gender_breakdown',
-                'kecamatan_list': kecamatan_list,
+                'kecamatan_list': ['ALL'] + kecamatan_list,
+                'get_desa_list': get_desa_list,
                 'status_categories': status_categories,
                 'gender_options': gender_options,
                 'get_filtered_df': get_filtered_df
@@ -399,13 +611,23 @@ class MadiunDataVisualizer:
             numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
             status_list = [col for col in numeric_cols if col not in ['KECAMATAN', 'DESA']]
             
-            def get_filtered_df(selected_kecamatan, selected_status):
-                filtered_df = df[df['KECAMATAN'].isin(selected_kecamatan)]
+            def get_filtered_df(selected_kecamatan, selected_status, selected_desa=None):
+                # Check if ALL is selected or a specific kecamatan
+                if selected_kecamatan[0] == 'ALL':
+                    filtered_df = df.copy()
+                else:
+                    filtered_df = df[df['KECAMATAN'] == selected_kecamatan[0]]
+                
+                # Apply desa filter if provided and a specific kecamatan is selected
+                if selected_kecamatan[0] != 'ALL' and selected_desa and len(selected_desa) > 0:
+                    filtered_df = filtered_df[filtered_df['DESA'].isin(selected_desa)]
+                    
                 return filtered_df[['KECAMATAN', 'DESA'] + selected_status]
             
             return {
                 'type': 'no_gender_breakdown',
-                'kecamatan_list': kecamatan_list,
+                'kecamatan_list': ['ALL'] + kecamatan_list,
+                'get_desa_list': get_desa_list,
                 'status_list': status_list,
                 'get_filtered_df': get_filtered_df
             }
