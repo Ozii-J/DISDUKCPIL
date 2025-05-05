@@ -659,12 +659,9 @@ def render_kia_filters(filter_data):
        default=['MEMILIKI KIA']
    )
    
-   # Filter Jenis Kelamin
-   selected_gender = st.sidebar.multiselect(
-       "Pilih Jenis Kelamin",
-       options=filter_data['gender_options'],
-       default=filter_data['gender_options']
-   )
+   # Remove gender filter for KIA data
+   # Since backend expects this parameter, we'll pass all gender options by default
+   selected_gender = filter_data['gender_options']
    
    return filter_data['get_filtered_df']([selected_kecamatan], selected_status, selected_gender, selected_desa)
 
